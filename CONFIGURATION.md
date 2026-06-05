@@ -1,6 +1,6 @@
 # Configuration Guide
 
-This file contains setup and configuration instructions for running `MyHotels` with both the MCP server and the backend API server.
+This file contains setup and configuration guidance for running `MyHotels` with both the MCP server and the backend API server.
 
 ## Prerequisites
 
@@ -15,46 +15,76 @@ You need:
 
 ## PingOne Setup
 
-### Protected resource
+### MCP protected resource
 
-Create a custom resource in PingOne:
+Create a custom resource in PingOne for the MCP-facing access token:
 
-- `Resource Name`: `Hotel MCP API`
-- `Audience`: `hotel_mcp`
-- `Description`: `MCP API for the MyHotels app`
+- `Resource Name`: `MyHotels MCP Resource`
+- `Audience`: `myhotels-hotelmcp`
+- `Description`: `MCP-facing protected resource for the MyHotels app`
 
 Enable this scope:
 
 - `my-hotels:mcp:member-access`
 
-### ChatGPT / MCP client
+### Backend API protected resource
 
-Create one confidential OIDC application for ChatGPT access and MCP token exchange:
+Create a second custom resource in PingOne for the backend API:
 
-- `Application Type`: `OIDC Web App`
+- `Resource Name`: `MyHotels API Resource`
+- `Audience`: `myhotels-hotelapi`
+- `Description`: `Backend API protected resource for the MyHotels app`
+
+Enable this scope:
+
+- `my-hotels:api:member-access`
+
+### ChatGPT agent
+
+Create an AI Agent for ChatGPT to the MCP resource only:
+
 - Redirect URI: `https://chatgpt.com/connector_platform_oauth_redirect`
 - Grant types:
   - `Authorization Code`
   - `Refresh Token`
-  - `Client Credentials`
 - Token endpoint auth method:
-  - `Client Secret Basic` or `Client Secret Post`
-- PKCE:
-  - enabled / required
+  - `Client Secret Basic`
 
-Attach the protected resource and enable:
+
+Attach the MCP protected resource and enable:
 
 - `my-hotels:mcp:member-access`
 
-Use the same client credentials for:
+Important:
 
-- ChatGPT connector configuration
+- this ChatGPT client is used only in the ChatGPT connector configuration
+- it is **not** the client configured in `.env`
+- it is **not** used by the MCP server for token exchange
+
+### MCP token-exchange client for the API resource
+
+Create a confidential OIDC application used by the MCP server to exchange the ChatGPT token for a backend API token:
+
+- `Application Type`: `OIDC Web App` or another confidential client type supported by your PingOne setup
+- Grant types:
+  - `Token Exchange`
+- Token endpoint auth method:
+  - `Client Secret Basic`
+
+Attach the backend API protected resource and enable:
+
+- `my-hotels:api:member-access`
+
+Use this application's credentials for:
+
 - `MCP_CLIENT_ID`
 - `MCP_CLIENT_SECRET`
 
+This client is used only by the MCP server when it calls the PingOne token endpoint for backend API token exchange.
+
 ### Dedicated CIBA client
 
-Create a second OIDC client for CIBA:
+Create an OIDC client for CIBA:
 
 - `Application Type`: `OIDC Web App`
 - enable `CIBA` grant type
@@ -62,6 +92,20 @@ Create a second OIDC client for CIBA:
 - attach the appropriate DaVinci CIBA flow policy
 
 This client is used only by the backend API server when it initiates and polls CIBA.
+
+Use this application's credentials for:
+
+- `CIBA_CLIENT_ID`
+- `CIBA_CLIENT_SECRET`
+
+This is a separate client from the MCP token-exchange client. Even though both use client credentials at the token endpoint, they serve different purposes:
+
+- `MCP_CLIENT_ID` / `MCP_CLIENT_SECRET`
+  - used by the MCP server for OAuth token exchange
+  - used to obtain backend API tokens
+- `CIBA_CLIENT_ID` / `CIBA_CLIENT_SECRET`
+  - used by the backend API for CIBA authorization and polling
+  - used to start and complete the approval flow
 
 ## Environment Variables
 
@@ -79,14 +123,14 @@ API_BASE_URL=http://localhost:3200
 # PingOne authorization server base URL
 AUTH_SERVER_URL=https://auth.pingone.eu/<environment-id>/as
 
-# ChatGPT-facing MCP token requirements
-MCP_AUDIENCE=hotel_mcp
+# MCP protected resource token requirements
+MCP_AUDIENCE=myhotels-hotelmcp
 MCP_SCOPE=my-hotels:mcp:member-access
-MCP_CLIENT_ID=<pingone-mcp-client-id>
-MCP_CLIENT_SECRET=<pingone-mcp-client-secret>
+MCP_CLIENT_ID=<pingone-mcp-token-exchange-client-id>
+MCP_CLIENT_SECRET=<pingone-mcp-token-exchange-client-secret>
 
 # Backend API token requirements
-API_AUDIENCE=hotel_api
+API_AUDIENCE=myhotels-hotelapi
 API_SCOPE=my-hotels:api:member-access
 
 # PingOne CIBA client used by the backend API
@@ -99,10 +143,10 @@ CIBA_SCOPE=openid my-hotels:api:book
 
 How these values are used:
 
-- ChatGPT authenticates to the MCP using the MCP-facing audience and scope.
-- The MCP validates that ChatGPT token locally with JWKS.
-- For protected backend calls, the MCP uses `MCP_CLIENT_ID` and `MCP_CLIENT_SECRET` to perform token exchange at the PingOne token endpoint.
-- The exchanged token is requested for `API_AUDIENCE` and `API_SCOPE`.
+- ChatGPT authenticates to the MCP using the separate ChatGPT connector client attached to the MCP protected resource.
+- The MCP validates that ChatGPT token locally with JWKS against `MCP_AUDIENCE` and `MCP_SCOPE`.
+- For protected backend calls, the MCP uses `MCP_CLIENT_ID` and `MCP_CLIENT_SECRET` from the separate MCP token-exchange client.
+- That token exchange requests a backend API token for `API_AUDIENCE` and `API_SCOPE`.
 - The backend API validates that exchanged token locally with JWKS.
 - The backend API uses the separate CIBA client to start and poll approval sessions.
 
@@ -201,7 +245,8 @@ Check:
 - `AUTH_SERVER_URL`
 - the user token includes your configured `MCP_SCOPE`
 - the MCP token audience matches `MCP_AUDIENCE`
-- token exchange is enabled for the MCP client in PingOne
+- the ChatGPT connector client is attached to the MCP protected resource, not the API resource
+- token exchange is enabled for the separate MCP token-exchange client in PingOne
 - the backend-translated token audience matches `API_AUDIENCE`
 - the backend-translated token includes `API_SCOPE`
 

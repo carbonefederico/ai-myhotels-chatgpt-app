@@ -2,29 +2,30 @@
 
 `MyHotels` is a ChatGPT app, built with the OpenAI Apps SDK, that allows:
 
-- hotels search
-- members hotel search
-- hotel booking, with end user approval
+- hotel search
+- member-rate hotel search
+- hotel booking with end-user approval
 
 The project shows how ChatGPT, MCP, a backend hotel API, PingOne, and a widget UI can work together when some capabilities are public and others require PingOne-backed authentication and end-user authorization.
 
 In a ChatGPT app, ChatGPT is the host runtime. It connects to the MCP server to discover tools, resources, and authentication requirements, then uses those definitions to decide what it can call and what UI it can render. When a tool response includes an `openai/outputTemplate` reference, ChatGPT reads the referenced MCP resource, mounts the widget in its sandboxed runtime, and exposes the `window.openai` bridge so the widget can call tools back through ChatGPT.
 
 ```mermaid
+%%{init: {'flowchart': {'curve': 'linear'}}}%%
 flowchart LR
     U["User"] --> CG
 
     subgraph CG["ChatGPT Host Runtime"]
         direction TB
         CORE["ChatGPT"]
-        WR["Widget Runtime"]
+        WR["Widget Runtime\n(runs Widget UI)"]
     end
 
     subgraph MCP["MCP Server"]
         direction TB
         TOOLS["Tools"]
-        RES["Resources"]
-        AUTH["Auth / Token Validation"]
+        RES["Resources\n(publishes Widget UI)"]
+        AUTH["Token Validation / Exchange"]
         CLIENT["Backend API Client"]
     end
 
@@ -33,48 +34,47 @@ flowchart LR
 
     CORE --> TOOLS
     CORE --> RES
-    RES --> WR
-    WR --> CORE
+    CORE --> WR
 
     TOOLS --> AUTH
     TOOLS --> CLIENT
     CLIENT --> API
     AUTH --> P1
     API --> P1
-    CG --> W["Widget UI"]
-    W --> CG
 ```
 
 ## Components
 
-This project includes: 
+This project includes:
 
 ### MCP Server
 
 The MCP server is the ChatGPT-facing integration layer. It:
 
-- exposes MCP tools
+- exposes MCP tools (`search_hotels`, `search_hotels_member_rates`, `prepare_booking`, `get_booking_status`)
 - serves the widget resource that ChatGPT later mounts in its own widget runtime
 - validates bearer tokens locally using PingOne-issued JWTs and JWKS
+- performs OAuth token exchange before protected backend API calls
 - calls the backend hotel REST API
-
-### Backend API Server
-
-The backend API server owns the hotel business surface. It:
-
-- exposes REST JSON endpoints for hotel search and booking
-- stores the hotel catalog
-- returns booking quotes
-- creates confirmed bookings after the MCP completes approval
-
-### Widget UI
 
 The widget is a single-file HTML app rendered in ChatGPT. It:
 
 - displays hotels on a map
-- renders hotel cards
+- renders hotel cards and booking panels
 - calls MCP tools through `window.openai`
 - polls booking status while approval is pending
+
+### Backend API Server
+
+The backend API server owns the demo hotel business surface. It:
+
+- exposes REST JSON endpoints for hotel search and booking intents
+- stores the hotel catalog
+- returns booking quotes
+- starts and polls CIBA approval flows
+- holds booking-intent state in memory for the demo
+
+For the demo it provides mock data with no persistent storage.
 
 ## MCP Resources
 
@@ -124,6 +124,7 @@ Security model:
 - requires a valid bearer token
 - MCP validates the JWT locally
 - MCP requires the `hotels:member_access` scope
+- MCP exchanges the ChatGPT-facing token for a backend API token before calling the backend API
 
 ### `prepare_booking`
 
@@ -137,6 +138,7 @@ Security model:
 - requires a valid bearer token
 - MCP validates the JWT locally
 - MCP derives the booking owner from token `sub`
+- MCP exchanges the ChatGPT-facing token for a backend API token
 - MCP forwards the request to the backend API
 - backend creates the booking intent and starts CIBA
 
@@ -145,24 +147,50 @@ Security model:
 Protected tool.
 
 Purpose:
-- return the current status of a pending booking approval
+- return the current status of a pending booking approval (polled by the ChatGPT runtime)
 
 Security model:
 - requires a valid bearer token
-- booking lookup is bound to `ownerSub === token.sub`
+- MCP exchanges the ChatGPT-facing token for a backend API token
+- booking status lookup requires both the exact `transactionId` and a bearer token whose `sub` matches the booking owner
 - MCP forwards the status request to the backend API
-- backend polls PingOne until the transaction becomes `approved`, `denied`, or `expired`
+- backend uses the stored `authRequestId` to poll PingOne until the transaction becomes `approved`, `denied`, or `expired`
+
+## Backend APIs
+
+The backend API is a separate REST JSON service behind the MCP layer. It is not called directly by ChatGPT or the widget. The MCP uses it after local token validation and, for protected routes, after token exchange.
+
+The main backend endpoints are:
+
+- `GET /hotels`
+  - returns public hotel results
+  - when called with `memberRates=true`, requires a backend API token with the configured API scope
+- `POST /booking-intents`
+  - creates a new booking intent for a specific hotel and stay request
+  - starts a CIBA authorization request with PingOne
+  - requires a backend API token with the configured API scope
+- `GET /booking-intents/:transactionId`
+  - returns the current booking-intent status
+  - polls PingOne while approval is pending
+  - requires a backend API token with the configured API scope
+
+The backend API validates its own bearer tokens locally using JWT signature verification and JWKS. Those tokens are obtained by the MCP through OAuth token exchange.
 
 ## Security Model
 
 The current implementation uses a mixed model:
 
 - public search does not require OAuth
-- protected search and booking require PingOne-backed access tokens
-- token validation happens in the MCP server through local JWT verification
+- protected search and booking require a PingOne-issued access token for the MCP-facing audience and scope
+- the MCP validates the incoming bearer token locally using JWT signature verification and JWKS
+- for protected backend calls, the MCP performs OAuth token exchange to obtain a backend API access token with the backend audience and scope
+- the backend API validates that exchanged token locally using JWT signature verification and JWKS
+- booking status lookup requires both:
+  - the exact `transactionId`
+  - a bearer token whose `sub` matches the stored `ownerSub`
+- after the booking record is identified and ownership is confirmed, the backend uses the booking’s stored `authRequestId` to poll PingOne for the corresponding CIBA transaction
 - booking intents and approval state live in the backend API
-- booking state is user-bound through the token `sub`
-
+- the CIBA `auth_req_id` is kept server-side and is not trusted as a client-supplied lookup key
 
 ## Runtime Behavior
 
@@ -192,17 +220,20 @@ Before the first user-driven tool call, ChatGPT initializes the MCP connection a
 3. MCP checks bearer token and required scope
 4. If auth is missing or insufficient, MCP returns an OAuth challenge
 5. ChatGPT completes OAuth and retries
-6. MCP calls the backend API and returns protected pricing
+6. MCP exchanges the ChatGPT-facing token for a backend API token
+7. MCP calls the backend API and returns protected pricing
 
 ### Booking
 
 1. User selects a hotel and clicks `Book`
 2. Widget calls `prepare_booking`
-3. MCP validates the token and forwards the request to the backend API
-4. Backend creates the booking intent, starts CIBA, and stores the pending approval transaction
-5. Widget polls `get_booking_status`
-6. MCP forwards the poll request to the backend API
-7. Backend polls PingOne and returns the updated booking-intent status
+3. MCP validates the incoming token
+4. MCP exchanges it for a backend API token
+5. MCP forwards the booking request to the backend API
+6. Backend creates the booking intent, starts CIBA, and stores the pending approval transaction
+7. Widget polls `get_booking_status`
+8. MCP exchanges the token again if needed and forwards the poll request
+9. Backend polls PingOne and returns the updated booking-intent status
 
 ## Sequence Diagrams
 
@@ -234,6 +265,7 @@ sequenceDiagram
     participant CG as ChatGPT
     participant MCP as MCP Server
     participant P1 as PingOne
+    participant API as Backend API
 
     U->>W: Show member rates
     W->>CG: window.openai.sendFollowUpMessage(...)
@@ -245,6 +277,10 @@ sequenceDiagram
         P1-->>CG: access token
         CG->>MCP: retry tools/call(search_hotels_member_rates)
     end
+    MCP->>P1: token exchange
+    P1-->>MCP: backend API token
+    MCP->>API: GET /hotels?memberRates=true
+    API-->>MCP: member-rate hotels
     MCP-->>CG: member-rate hotels
     CG->>W: provide updated toolOutput
 ```
@@ -264,6 +300,8 @@ sequenceDiagram
     W->>CG: window.openai.callTool("prepare_booking", ...)
     CG->>MCP: tools/call(prepare_booking)
     MCP->>MCP: validate token and derive sub
+    MCP->>P1: token exchange
+    P1-->>MCP: backend API token
     MCP->>API: POST /booking-intents
     API->>P1: POST cibaAuthorization
     P1-->>API: auth_req_id + expires_in + interval
@@ -274,7 +312,9 @@ sequenceDiagram
     loop while pending
         W->>CG: window.openai.callTool("get_booking_status", ...)
         CG->>MCP: tools/call(get_booking_status)
-        MCP->>MCP: verify ownerSub matches token.sub
+        MCP->>MCP: validate token and verify ownerSub matches token.sub
+        MCP->>P1: token exchange
+        P1-->>MCP: backend API token
         MCP->>API: GET /booking-intents/:transactionId
         API->>P1: POST token (CIBA poll)
         P1-->>API: pending or final state
@@ -286,7 +326,7 @@ sequenceDiagram
 
 ## Endpoints
 
-The app exposes the following endpoints:
+The app exposes the following MCP-facing endpoints:
 
 - `/mcp`
 - `/.well-known/oauth-protected-resource`
@@ -294,7 +334,7 @@ The app exposes the following endpoints:
 
 ## Configuration Info
 
-- [CONFIGURATION.md](/Users/fcarbone/Documents/projects/ai/chatgpt-apps-mixed-auth/CONFIGURATION.md): PingOne setup, environment variables, build/run steps, connector setup
+- [CONFIGURATION.md](/Users/fcarbone/Documents/projects/ai/ai-myhotels-chatgpt-app/CONFIGURATION.md): PingOne setup, environment variables, build/run steps, connector setup
 
 ## License
 
