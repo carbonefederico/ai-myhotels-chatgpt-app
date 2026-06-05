@@ -1,0 +1,29 @@
+{
+  "name": "chatgpt-mixed-auth-hotel-app",
+  "version": "1.0.0",
+  "description": "ChatGPT app with mixed authentication - public and protected tools",
+  "type": "module",
+  "scripts": {
+    "build": "tsc && vite build",
+    "build:server": "tsc",
+    "build:ui": "vite build",
+    "dev": "tsc && vite build && node scripts/start-local.mjs",
+    "start:api": "node dist/api-server/server.js",
+    "start:mcp": "node dist/mcp-server/server.js",
+    "start": "node scripts/start-local.mjs",
+    "test:ciba": "node tools/test-ciba.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "dotenv": "^17.4.2",
+    "express": "^4.21.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7",
+    "vite-plugin-singlefile": "^2.0.2"
+  }
+}

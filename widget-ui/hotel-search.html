@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Widget shell mounted by ChatGPT for the MyHotels hotel search experience. -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyHotels</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="app">
+    <header class="app-shell__masthead">
+      <div class="brand-lockup">
+        <img class="brand-lockup__mark" src="./img/myhotels-logo.png" alt="MyHotels logo">
+        <div class="brand-lockup__text">
+          <span id="brand-name" class="brand-lockup__name">MyHotels</span>
+          <span class="brand-lockup__subtitle">Smart hotel search with secure booking</span>
+        </div>
+      </div>
+    </header>
+
+    <main id="main-content" class="app-shell__body">
+      <div id="loading" class="status-panel status-panel--loading">
+        <div class="status-panel__spinner"></div>
+        <p>Loading hotels...</p>
+      </div>
+
+      <div id="map-view" class="results-shell hidden">
+        <div id="map-controls" class="results-shell__rail">
+          <!-- Controls will be rendered here by JS -->
+        </div>
+        <div class="results-shell__canvas">
+          <div id="map" class="results-map"></div>
+        </div>
+      </div>
+
+      <div id="empty-state" class="status-panel status-panel--empty hidden">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+        <h3>No hotels to display</h3>
+        <p>Try asking: "Search for hotels in Paris" or "Find hotels in London"</p>
+      </div>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  </div>
+
+  <script type="module" src="./hotel-search.ts"></script>
+</body>
+</html>
