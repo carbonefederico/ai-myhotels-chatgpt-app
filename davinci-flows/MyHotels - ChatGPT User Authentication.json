@@ -1,0 +1,449 @@
+{
+  "companyId": "0f69c5e4-c492-4c33-b45a-2fd1eb2afa8a",
+  "authTokenExpireIds": [],
+  "connectorIds": [
+    "pingOneSSOConnector",
+    "pingOneFormsConnector",
+    "pingOneAuthenticationConnector",
+    "errorConnector"
+  ],
+  "createdDate": 1780925247569,
+  "currentVersion": 18,
+  "customerId": "c6d895e99f6b3e83fe61aee632bf486d",
+  "deployedDate": 1780925260547,
+  "description": "",
+  "flowStatus": "enabled",
+  "isOutputSchemaSaved": false,
+  "name": "My Hotels - ChatGPT User Authentication",
+  "publishedVersion": 18,
+  "settings": {
+    "csp": "worker-src 'self' blob:; script-src 'self' https://cdn.jsdelivr.net https://code.jquery.com https://devsdk.singularkey.com http://cdnjs.cloudflare.com 'unsafe-inline' 'unsafe-eval';",
+    "enforcedCsp": "script-src 'nonce-rAnd0m' 'strict-dynamic' 'unsafe-eval' 'unsafe-inline' https: http:; object-src 'none'; base-uri 'none';",
+    "intermediateLoadingScreenCSS": "",
+    "intermediateLoadingScreenHTML": "",
+    "customTimeoutErrorScreenMessage": "",
+    "customTimeoutErrorScreenHTML": "",
+    "customTimeoutErrorScreenCSS": "",
+    "logLevel": 3
+  },
+  "timeouts": "null",
+  "trigger": {
+    "type": "AUTHENTICATION"
+  },
+  "updatedDate": 1780925260569,
+  "flowId": "cd01202300ab5016e541198c9f38dec5",
+  "versionId": 18,
+  "graphData": {
+    "elements": {
+      "nodes": [
+        {
+          "data": {
+            "id": "wkkgffhkuz",
+            "connectionId": "94141bf2f1b9b59a5f5365ff135e02bb",
+            "nodeType": "CONNECTION",
+            "status": "configured",
+            "connectorId": "pingOneSSOConnector",
+            "name": "PingOne",
+            "label": "PingOne",
+            "type": "action",
+            "capabilityName": "checkPassword",
+            "properties": {
+              "identifier": {
+                "value": "[\n  {\n    \"children\": [\n      {\n        \"text\": \"\"\n      },\n      {\n        \"text\": \"\"\n      },\n      {\n        \"type\": \"link\",\n        \"src\": \"pingone-forms.svg\",\n        \"url\": \"username\",\n        \"data\": \"{{local.ni4r7b0vlq.payload.output.formData.user.username}}\",\n        \"tooltip\": \"{{local.ni4r7b0vlq.payload.output.formData.user.username}}\",\n        \"children\": [\n          {\n            \"text\": \"username\"\n          }\n        ]\n      },\n      {\n        \"text\": \"\"\n      }\n    ]\n  }\n]"
+              },
+              "matchAttribute": {
+                "value": "username"
+              },
+              "password": {
+                "value": "[\n  {\n    \"children\": [\n      {\n        \"text\": \"\"\n      },\n      {\n        \"text\": \"\"\n      },\n      {\n        \"type\": \"link\",\n        \"src\": \"pingone-forms.svg\",\n        \"url\": \"password\",\n        \"data\": \"{{local.ni4r7b0vlq.payload.output.formData.user.password}}\",\n        \"tooltip\": \"{{local.ni4r7b0vlq.payload.output.formData.user.password}}\",\n        \"children\": [\n          {\n            \"text\": \"password\"\n          }\n        ]\n      },\n      {\n        \"text\": \"\"\n      }\n    ]\n  }\n]"
+              }
+            }
+          },
+          "position": {
+            "x": 660,
+            "y": 240
+          },
+          "group": "nodes",
+          "removed": false,
+          "selected": false,
+          "selectable": true,
+          "locked": false,
+          "grabbable": true,
+          "pannable": false,
+          "classes": ""
+        },
+        {
+          "data": {
+            "id": "8mpeha2h7x",
+            "nodeType": "EVAL",
+            "label": "Evaluator",
+            "properties": {
+              "knwo571ric": {
+                "value": "anyTriggersFalse"
+              }
+            }
+          },
+          "position": {
+            "x": 810,
+            "y": 240
+          },
+          "group": "nodes",
+          "removed": false,
+          "selected": false,
+          "selectable": true,
+          "locked": false,
+          "grabbable": true,
+          "pannable": false,
+          "classes": ""
+        },
+        {
+          "data": {
+            "id": "ni4r7b0vlq",
+            "connectionId": "8209285e0d2f3fc76bfd23fd10d45e6f",
+            "nodeType": "CONNECTION",
+            "status": "configured",
+            "connectorId": "pingOneFormsConnector",
+            "capabilityName": "showForm",
+            "name": "PingOne Forms",
+            "label": "PingOne Forms",
+            "type": "action",
+            "properties": {
+              "nodeTitle": {
+                "value": "MyHotels - Login & Consent"
+              },
+              "form": {
+                "value": "866f4203-c8fd-4ebb-9bd9-3199ff42a127"
+              },
+              "formData": {
+                "value": [
+                  {
+                    "key": "user.username",
+                    "value": ""
+                  },
+                  {
+                    "key": "user.password",
+                    "value": ""
+                  }
+                ]
+              },
+              "dynamicText": {
+                "value": []
+              }
+            },
+            "capabilityClass": "render",
+            "outcomes": [
+              {
+                "result": "submit",
+                "label": "Login & Approve",
+                "id": "4a38nw78i7"
+              }
+            ]
+          },
+          "position": {
+            "x": 300,
+            "y": 180
+          },
+          "group": "nodes",
+          "removed": false,
+          "selected": false,
+          "selectable": true,
+          "locked": false,
+          "grabbable": true,
+          "pannable": false,
+          "classes": ""
+        },
+        {
+          "data": {
+            "id": "uhbgsaun4y",
+            "nodeType": "CONNECTION",
+            "connectionId": "c3e6a164bde107954e93f5c09f0c8bce",
+            "connectorId": "pingOneAuthenticationConnector",
+            "name": "PingOne Authentication",
+            "label": "PingOne Authentication",
+            "status": "configured",
+            "capabilityName": "returnSuccessResponseRedirect",
+            "type": "action",
+            "properties": {
+              "idleTimeout": {
+                "value": 43200
+              },
+              "overrideAuthState": {
+                "value": false
+              },
+              "userId": {
+                "value": "[{\"children\":[{\"text\":\"\"}]}]"
+              },
+              "authenticationMethods": {
+                "value": "pwd"
+              }
+            }
+          },
+          "position": {
+            "x": 990,
+            "y": 240
+          },
+          "group": "nodes",
+          "removed": false,
+          "selected": false,
+          "selectable": true,
+          "locked": false,
+          "grabbable": true,
+          "pannable": false,
+          "classes": ""
+        },
+        {
+          "data": {
+            "id": "knwo571ric",
+            "nodeType": "CONNECTION",
+            "connectionId": "53ab83a4a4ab919d9f2cb02d9e111ac8",
+            "connectorId": "errorConnector",
+            "name": "Error Message",
+            "label": "Error Message",
+            "status": "configured",
+            "capabilityName": "customErrorMessage",
+            "type": "action",
+            "properties": {
+              "errorMessage": {
+                "value": "[\n  {\n    \"children\": [\n      {\n        \"text\": \"Login Error\"\n      }\n    ]\n  }\n]"
+              }
+            },
+            "capabilityClass": "backend"
+          },
+          "position": {
+            "x": 987.0034806738564,
+            "y": 486.4196249829324
+          },
+          "group": "nodes",
+          "removed": false,
+          "selected": false,
+          "selectable": true,
+          "locked": false,
+          "grabbable": true,
+          "pannable": false,
+          "classes": ""
+        },
+        {
+          "data": {
+            "id": "m1pxi3uwes",
+            "nodeType": "EVAL"
+          },
+          "position": {
+            "x": 480,
+            "y": 240
+          },
+          "group": "nodes",
+          "removed": false,
+          "selected": false,
+          "selectable": true,
+          "locked": false,
+          "grabbable": true,
+          "pannable": false,
+          "classes": ""
+        }
+      ],
+      "edges": [
+        {
+          "data": {
+            "id": "4eq0w9396y",
+            "source": "m1pxi3uwes",
+            "target": "wkkgffhkuz"
+          },
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "group": "edges",
+          "removed": false,
+          "selected": false,
+          "selectable": true,
+          "locked": false,
+          "grabbable": true,
+          "pannable": true,
+          "classes": ""
+        },
+        {
+          "data": {
+            "id": "110t6rnwkd",
+            "source": "8mpeha2h7x",
+            "target": "knwo571ric"
+          },
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "group": "edges",
+          "removed": false,
+          "selected": false,
+          "selectable": true,
+          "locked": false,
+          "grabbable": true,
+          "pannable": true,
+          "classes": ""
+        },
+        {
+          "data": {
+            "id": "d7v86ks0rk",
+            "source": "8mpeha2h7x",
+            "target": "uhbgsaun4y"
+          },
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "group": "edges",
+          "removed": false,
+          "selected": false,
+          "selectable": true,
+          "locked": false,
+          "grabbable": true,
+          "pannable": true,
+          "classes": ""
+        },
+        {
+          "data": {
+            "id": "7087jutkwc",
+            "source": "wkkgffhkuz",
+            "target": "8mpeha2h7x"
+          },
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "group": "edges",
+          "removed": false,
+          "selected": false,
+          "selectable": true,
+          "locked": false,
+          "grabbable": true,
+          "pannable": true,
+          "classes": ""
+        },
+        {
+          "data": {
+            "id": "chh643vlnp",
+            "source": "ni4r7b0vlq",
+            "target": "m1pxi3uwes",
+            "multiValueSourceId": "4a38nw78i7"
+          },
+          "position": {
+            "x": 64,
+            "y": 52
+          },
+          "group": "edges",
+          "removed": false,
+          "selected": false,
+          "selectable": true,
+          "locked": false,
+          "grabbable": true,
+          "pannable": true,
+          "classes": ""
+        }
+      ]
+    },
+    "data": {},
+    "zoomingEnabled": true,
+    "userZoomingEnabled": true,
+    "zoom": 1,
+    "minZoom": 1e-50,
+    "maxZoom": 1e+50,
+    "panningEnabled": true,
+    "userPanningEnabled": true,
+    "pan": {
+      "x": 0,
+      "y": 0
+    },
+    "boxSelectionEnabled": true,
+    "renderer": {
+      "name": "null"
+    }
+  },
+  "flowColor": "#E3F0FF",
+  "savedDate": 1780925247435,
+  "variables": [],
+  "forms": {
+    "866f4203-c8fd-4ebb-9bd9-3199ff42a127": {
+      "id": "866f4203-c8fd-4ebb-9bd9-3199ff42a127",
+      "environment": {
+        "id": "0f69c5e4-c492-4c33-b45a-2fd1eb2afa8a"
+      },
+      "name": "MyHotels - Login & Consent",
+      "description": "This is an out-of-the-box sign on form that prompts for username and password.",
+      "category": "CUSTOM",
+      "components": {
+        "fields": [
+          {
+            "type": "SLATE_TEXTBLOB",
+            "position": {
+              "row": 0,
+              "col": 0
+            },
+            "content": "[{\"type\":\"align-center\",\"children\":[{\"children\":[{\"text\":\"Approve Access\",\"fontWeight\":\"bold\"}],\"type\":\"heading-1\"},{\"type\":\"heading-1\",\"children\":[{\"fontWeight\":\"bold\",\"text\":\"\"}]}]},{\"type\":\"divider\",\"children\":[{\"text\":\"\"}]},{\"type\":\"paragraph\",\"children\":[{\"text\":\"\"}]},{\"type\":\"paragraph\",\"children\":[{\"text\":\"\"}]},{\"type\":\"paragraph\",\"children\":[{\"text\":\"ChatGPT\",\"fontWeight\":\"bold\"},{\"text\":\" is requesting:\"}]},{\"type\":\"paragraph\",\"children\":[{\"text\":\"\"}]},{\"type\":\"bulleted-list\",\"children\":[{\"type\":\"list-item\",\"children\":[{\"text\":\"read access to \"},{\"text\":\"your\",\"fontWeight\":\"bold\"},{\"text\":\" \"},{\"text\":\"profile data\",\"fontWeight\":\"bold\"}]},{\"type\":\"list-item\",\"children\":[{\"text\":\"read access to \"},{\"text\":\"your\",\"fontWeight\":\"bold\"},{\"text\":\" \"},{\"text\":\"member rates\",\"fontWeight\":\"bold\"}]},{\"type\":\"list-item\",\"children\":[{\"text\":\"write access to your \"},{\"text\":\"bookings\",\"fontWeight\":\"bold\"}]}]},{\"type\":\"paragraph\",\"children\":[{\"text\":\"\"}]},{\"type\":\"paragraph\",\"children\":[{\"text\":\"Input your username and password to authenticate and approve.\"}]},{\"type\":\"paragraph\",\"children\":[{\"text\":\"\"}]}]",
+            "key": "rich-text"
+          },
+          {
+            "type": "ERROR_DISPLAY",
+            "position": {
+              "row": 1,
+              "col": 0
+            }
+          },
+          {
+            "type": "TEXT",
+            "position": {
+              "row": 2,
+              "col": 0
+            },
+            "key": "user.username",
+            "label": "[{\"type\":\"paragraph\",\"children\":[{\"text\":\"\"},{\"type\":\"i18n\",\"key\":\"fields.user.username.label\",\"defaultTranslation\":\"Username\",\"inline\":true,\"children\":[{\"text\":\"\"}]},{\"text\":\"\"}]}]",
+            "required": true,
+            "validation": {
+              "type": "NONE",
+              "regex": "",
+              "errorMessage": ""
+            },
+            "otherOptionEnabled": false,
+            "otherOptionAttributeDisabled": false,
+            "attributeDisabled": false
+          },
+          {
+            "type": "PASSWORD",
+            "position": {
+              "row": 3,
+              "col": 0
+            },
+            "key": "user.password",
+            "label": "[{\"type\":\"paragraph\",\"children\":[{\"text\":\"\"},{\"type\":\"i18n\",\"key\":\"fields.user.password.label\",\"defaultTranslation\":\"Password\",\"inline\":true,\"children\":[{\"text\":\"\"}]},{\"text\":\"\"}]}]",
+            "required": true,
+            "validation": {
+              "type": "NONE",
+              "regex": "",
+              "errorMessage": ""
+            },
+            "otherOptionEnabled": false,
+            "otherOptionAttributeDisabled": false,
+            "showPasswordRequirements": false,
+            "attributeDisabled": false
+          },
+          {
+            "type": "SUBMIT_BUTTON",
+            "position": {
+              "row": 4,
+              "col": 0
+            },
+            "label": "[{\"type\":\"paragraph\",\"children\":[{\"text\":\"Login & Approve\"}]}]"
+          }
+        ]
+      },
+      "cols": 4,
+      "markOptional": true,
+      "markRequired": false,
+      "textAutoCompleteEnabled": false,
+      "passwordAutoCompleteEnabled": false,
+      "translationMethod": "TRANSLATE",
+      "created": "2026-04-07T14:54:46.071Z",
+      "modified": "2026-06-04T14:58:25.521Z",
+      "readOnly": false
+    }
+  },
+  "connections": []
+}

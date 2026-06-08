@@ -107,6 +107,128 @@ This is a separate client from the MCP token-exchange client. Even though both u
   - used by the backend API for CIBA authorization and polling
   - used to start and complete the approval flow
 
+## DaVinci Flow Setup
+
+This project expects two DaVinci flows:
+
+1. a user-authentication flow for ChatGPT access to the MCP protected resource
+2. a CIBA approval flow for the backend approval journey
+
+### Add the exported flow JSON files to the repo
+
+Store the exported/importable DaVinci flow JSON files in:
+
+- `davinci-flows/MyHotels - ChatGPT User Authentication.json`
+- `davinci-flows/MyHotels - CIBA Approval via Magic Link.json`
+
+These files are not used directly by the Node.js runtime. They are kept in the repo so the PingOne and DaVinci configuration is versioned together with the application.
+
+### Import the flows into DaVinci
+
+For each flow:
+
+1. Open DaVinci in your PingOne environment.
+2. Go to `Flows`.
+3. Choose `Import`.
+4. Import the JSON file from the repo.
+5. Save the imported flow with a clear name.
+
+Recommended names:
+
+- `MyHotels ChatGPT User Authentication`
+- `MyHotels CIBA Approval via Magic Link`
+
+### Configure the user-authentication flow
+
+Use the user-authentication flow for the ChatGPT-facing MCP application.
+
+The flow should handle:
+
+- primary user authentication
+- any required MFA or step-up for the ChatGPT sign-in journey
+- issuing the MCP-facing token for:
+  - `MCP_AUDIENCE=myhotels-hotelmcp`
+  - `MCP_SCOPE=my-hotels:mcp:member-access`
+
+In DaVinci, review and update any environment-specific settings inside the imported flow, such as:
+
+- PingOne environment or connection references
+- MFA or authenticator connectors
+- branding, redirect, or message text
+- any policy nodes that reference specific app names, scopes, or audiences
+
+### Attach the user-authentication flow to the ChatGPT application
+
+In PingOne:
+
+1. Open the ChatGPT-facing MCP application.
+2. Go to the sign-on / authentication policy area for the application.
+3. Select the DaVinci flow policy or authentication flow option.
+4. Attach the imported `MyHotels ChatGPT User Authentication` flow.
+5. Confirm that this application is attached to the MCP protected resource only.
+
+The important separation is:
+
+- the ChatGPT application uses the user-authentication flow
+- it issues MCP-facing tokens
+- it is not the token-exchange client
+- it is not the CIBA client
+
+### Configure the CIBA approval flow
+
+Use the CIBA approval flow for the dedicated CIBA client.
+
+The flow should handle:
+
+- the out-of-band approval journey
+- the user-facing approval prompt and decision
+- any PingOne MFA / DaVinci steps needed to approve or deny the booking
+- any display or branching logic based on the CIBA request context
+
+In DaVinci, review and update environment-specific settings inside the imported flow, such as:
+
+- PingOne environment or connection references
+- approval prompt content
+- MFA channels or authenticators
+- any policy nodes that reference specific client IDs, redirect settings, or approval methods
+
+### Attach the CIBA flow to the CIBA client
+
+In PingOne:
+
+1. Open the dedicated CIBA client.
+2. Confirm that the `CIBA` grant type is enabled.
+3. Open the DaVinci flow policy / CIBA policy configuration for the client.
+4. Attach the imported `MyHotels CIBA Approval via Magic Link` flow.
+5. Confirm that this client uses:
+   - `CIBA_CLIENT_ID`
+   - `CIBA_CLIENT_SECRET`
+
+The important separation is:
+
+- the CIBA client uses the CIBA approval flow
+- the MCP token-exchange client does not use this flow
+- the ChatGPT-facing MCP application does not use this flow
+
+### Quick mapping summary
+
+- ChatGPT-facing MCP application
+  - protected resource: MCP resource
+  - audience: `myhotels-hotelmcp`
+  - scope: `my-hotels:mcp:member-access`
+  - DaVinci flow: `MyHotels ChatGPT User Authentication`
+
+- MCP token-exchange client
+  - protected resource: backend API resource
+  - audience requested during exchange: `myhotels-hotelapi`
+  - scope requested during exchange: `my-hotels:api:member-access`
+  - DaVinci flow: none in this project setup
+
+- CIBA client
+  - used by backend API for CIBA
+  - CIBA scope: `openid my-hotels:api:book`
+  - DaVinci flow: `MyHotels CIBA Approval via Magic Link`
+
 ## Environment Variables
 
 Create a `.env` file in the project root:

@@ -334,7 +334,7 @@ The app exposes the following MCP-facing endpoints:
 
 ## Configuration Info
 
-- [CONFIGURATION.md](/Users/fcarbone/Documents/projects/ai/ai-myhotels-chatgpt-app/CONFIGURATION.md): PingOne setup, environment variables, build/run steps, connector setup
+- [CONFIGURATION.md](./CONFIGURATION.md): PingOne setup, environment variables, build/run steps, connector setup
 
 ## License
 
