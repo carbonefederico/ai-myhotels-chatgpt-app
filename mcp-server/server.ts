@@ -313,7 +313,7 @@ export function assembleTransportApp(config: Config): express.Application {
   const app = express();
 
   app.use(express.json());
-  app.use('/widget-assets/hotels', express.static(join(__dirname, '../../widget-ui/img/hotels')));
+  app.use('/widget-assets', express.static(join(__dirname, '../../widget-ui/img')));
 
   app.get('/widget/myhotels-widget', (_req, res) => {
     const html = readWidgetMarkup('myhotels-widget.html');
