@@ -314,7 +314,7 @@ npm run dev
 Raw widget:
 
 ```text
-http://localhost:3100/widget/hotel-search
+http://localhost:3100/widget/myhotels-widget
 ```
 
 ## Expose the App Publicly

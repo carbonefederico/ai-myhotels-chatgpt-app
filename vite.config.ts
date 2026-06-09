@@ -9,7 +9,7 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        'hotel-search': './widget-ui/hotel-search.html',
+        'myhotels-widget': './widget-ui/myhotels-widget.html',
       },
       output: {
         entryFileNames: '[name].js',

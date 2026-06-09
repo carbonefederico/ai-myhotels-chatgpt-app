@@ -80,11 +80,11 @@ For the demo it provides mock data with no persistent storage.
 
 The app currently exposes one primary resource:
 
-- `ui://widget/hotel-search.html`
+- `ui://widget/myhotels-widget.html`
 
 In MCP, a resource is server-provided content addressed by a URI and fetched through the MCP protocol, typically with `resources/read`.
 
-In this app, `ui://widget/hotel-search.html` is not a public web URL. It is a logical MCP resource identifier. When a tool response includes `openai/outputTemplate: "ui://widget/hotel-search.html"`, ChatGPT asks the MCP server for that resource, receives the HTML, and then mounts that HTML inside ChatGPT's widget runtime.
+In this app, `ui://widget/myhotels-widget.html` is not a public web URL. It is a logical MCP resource identifier. When a tool response includes `openai/outputTemplate: "ui://widget/myhotels-widget.html"`, ChatGPT asks the MCP server for that resource, receives the HTML, and then mounts that HTML inside ChatGPT's widget runtime.
 
 ## MCP Tools
 
@@ -208,7 +208,7 @@ Before the first user-driven tool call, ChatGPT initializes the MCP connection a
 
 1. ChatGPT calls `search_hotels`
 2. MCP returns hotel data plus the widget template reference
-3. ChatGPT reads `ui://widget/hotel-search.html` from the MCP server
+3. ChatGPT reads `ui://widget/myhotels-widget.html` from the MCP server
 4. ChatGPT mounts the widget in its own runtime
 5. ChatGPT provides the tool result to the widget as host state
 6. The widget renders map markers and hotel detail panels
@@ -249,7 +249,7 @@ sequenceDiagram
     U->>CG: Search hotels in a city
     CG->>MCP: tools/call(search_hotels)
     MCP-->>CG: hotels + outputTemplate
-    CG->>MCP: resources/read(ui://widget/hotel-search.html)
+    CG->>MCP: resources/read(ui://widget/myhotels-widget.html)
     MCP-->>CG: widget HTML resource
     CG->>W: instantiate widget runtime
     CG->>W: provide toolOutput / globals
@@ -330,7 +330,7 @@ The app exposes the following MCP-facing endpoints:
 
 - `/mcp`
 - `/.well-known/oauth-protected-resource`
-- `/widget/hotel-search`
+- `/widget/myhotels-widget`
 
 ## Configuration Info
 

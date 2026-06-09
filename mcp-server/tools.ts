@@ -20,7 +20,7 @@ import type { Config } from "./server.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const RESOURCE_MIME_TYPE = "text/html+skybridge";
-const WIDGET_RESOURCE_URI = "ui://widget/hotel-search.html";
+const WIDGET_RESOURCE_URI = "ui://widget/myhotels-widget.html";
 
 /** Reads the widget HTML that will be mounted either locally or through the MCP resource. */
 function readWidgetMarkup(filename: string): string {
@@ -48,7 +48,7 @@ export function mountWidgetResources(server: McpServer): void {
       resourceOptions,
       async () => {
         logInfo(['resource'], `${uri} read`);
-        const html = readWidgetMarkup("hotel-search.html");
+        const html = readWidgetMarkup("myhotels-widget.html");
         return {
           contents: [
             {

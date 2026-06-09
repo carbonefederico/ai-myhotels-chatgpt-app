@@ -315,8 +315,8 @@ export function assembleTransportApp(config: Config): express.Application {
   app.use(express.json());
   app.use('/widget-assets/hotels', express.static(join(__dirname, '../../widget-ui/img/hotels')));
 
-  app.get('/widget/hotel-search', (_req, res) => {
-    const html = readWidgetMarkup('hotel-search.html');
+  app.get('/widget/myhotels-widget', (_req, res) => {
+    const html = readWidgetMarkup('myhotels-widget.html');
     res.type('html').send(html);
   });
 
