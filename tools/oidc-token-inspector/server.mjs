@@ -56,7 +56,7 @@ const redirectUri =
   process.env.OIDC_INSPECTOR_REDIRECT_URI || `http://localhost:${port}/auth/callback`;
 const defaultScope =
   process.env.OIDC_INSPECTOR_SCOPE ||
-  `openid profile offline_access ${process.env.MCP_SCOPE || ""}`.trim();
+  `openid profile offline_access ${[process.env.MCP_MEMBER_RATES_SCOPE, process.env.MCP_BOOK_SCOPE].filter(Boolean).join(" ")}`.trim();
 const defaultAudience = process.env.OIDC_INSPECTOR_AUDIENCE || process.env.MCP_AUDIENCE || "";
 
 const authorizeEndpoint = `${authServerUrl}/authorize`;

@@ -123,7 +123,7 @@ Purpose:
 Security model:
 - requires a valid bearer token
 - MCP validates the JWT locally
-- MCP requires the `hotels:member_access` scope
+- MCP requires the `my-hotels:mcp:member_rates` scope
 - MCP exchanges the ChatGPT-facing token for a backend API token before calling the backend API
 
 ### `prepare_booking`
@@ -137,6 +137,7 @@ Purpose:
 Security model:
 - requires a valid bearer token
 - MCP validates the JWT locally
+- MCP requires the `my-hotels:mcp:book` scope
 - MCP derives the booking owner from token `sub`
 - MCP exchanges the ChatGPT-facing token for a backend API token
 - MCP forwards the request to the backend API
@@ -151,6 +152,7 @@ Purpose:
 
 Security model:
 - requires a valid bearer token
+- MCP requires the `my-hotels:mcp:book` scope
 - MCP exchanges the ChatGPT-facing token for a backend API token
 - booking status lookup requires both the exact `transactionId` and a bearer token whose `sub` matches the booking owner
 - MCP forwards the status request to the backend API
@@ -164,15 +166,15 @@ The main backend endpoints are:
 
 - `GET /hotels`
   - returns public hotel results
-  - when called with `memberRates=true`, requires a backend API token with the configured API scope
+  - when called with `memberRates=true`, requires a backend API token with `my-hotels:api:member_rates`
 - `POST /booking-intents`
   - creates a new booking intent for a specific hotel and stay request
   - starts a CIBA authorization request with PingOne
-  - requires a backend API token with the configured API scope
+  - requires a backend API token with `my-hotels:api:book`
 - `GET /booking-intents/:transactionId`
   - returns the current booking-intent status
   - polls PingOne while approval is pending
-  - requires a backend API token with the configured API scope
+  - requires a backend API token with `my-hotels:api:book`
 
 The backend API validates its own bearer tokens locally using JWT signature verification and JWKS. Those tokens are obtained by the MCP through OAuth token exchange.
 
@@ -181,9 +183,9 @@ The backend API validates its own bearer tokens locally using JWT signature veri
 The current implementation uses a mixed model:
 
 - public search does not require OAuth
-- protected search and booking require a PingOne-issued access token for the MCP-facing audience and scope
+- member-rate search and booking require PingOne-issued access tokens for the MCP-facing audience and operation-specific scopes
 - the MCP validates the incoming bearer token locally using JWT signature verification and JWKS
-- for protected backend calls, the MCP performs OAuth token exchange to obtain a backend API access token with the backend audience and scope
+- for protected backend calls, the MCP performs OAuth token exchange to obtain a backend API access token with the backend audience and the matching API scope
 - the backend API validates that exchanged token locally using JWT signature verification and JWKS
 - booking status lookup requires both:
   - the exact `transactionId`

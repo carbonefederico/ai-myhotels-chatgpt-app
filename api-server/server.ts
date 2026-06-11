@@ -25,7 +25,8 @@ interface ApiServerConfig {
   authIssuer: string;
   authJwksUrl: string;
   apiAudience: string;
-  apiScope: string;
+  apiMemberRatesScope: string;
+  apiBookScope: string;
   cibaAuthorizationEndpoint: string;
   cibaTokenEndpoint: string;
   cibaClientId: string;
@@ -127,7 +128,8 @@ function loadConfig(): ApiServerConfig {
   const apiPort = process.env.API_PORT;
   const authServerUrl = process.env.AUTH_SERVER_URL;
   const apiAudience = process.env.API_AUDIENCE;
-  const apiScope = process.env.API_SCOPE;
+  const apiMemberRatesScope = process.env.API_MEMBER_RATES_SCOPE;
+  const apiBookScope = process.env.API_BOOK_SCOPE;
   const cibaClientId = process.env.CIBA_CLIENT_ID;
   const cibaClientSecret = process.env.CIBA_CLIENT_SECRET;
   const cibaScope = process.env.CIBA_SCOPE;
@@ -144,8 +146,12 @@ function loadConfig(): ApiServerConfig {
     throw new Error("API_AUDIENCE environment variable is required");
   }
 
-  if (!apiScope) {
-    throw new Error("API_SCOPE environment variable is required");
+  if (!apiMemberRatesScope) {
+    throw new Error("API_MEMBER_RATES_SCOPE environment variable is required");
+  }
+
+  if (!apiBookScope) {
+    throw new Error("API_BOOK_SCOPE environment variable is required");
   }
 
   if (!cibaScope) {
@@ -178,7 +184,8 @@ function loadConfig(): ApiServerConfig {
     authIssuer,
     authJwksUrl,
     apiAudience,
-    apiScope,
+    apiMemberRatesScope,
+    apiBookScope,
     cibaAuthorizationEndpoint,
     cibaTokenEndpoint,
     cibaClientId,
@@ -370,11 +377,12 @@ function sendAuthError(res: Response, status: number, error: string): null {
   return null;
 }
 
-/** Validates the bearer token for backend API endpoints that require member access. */
+/** Validates the bearer token for backend API endpoints that require a specific scope. */
 async function requireApiToken(
   req: Request,
   res: Response,
-  config: ApiServerConfig
+  config: ApiServerConfig,
+  requiredScope: string
 ): Promise<{ tokenInfo: ValidatedTokenClaims; scopes: string[] } | null> {
   const token = readBearerToken(req);
   if (!token) {
@@ -401,12 +409,12 @@ async function requireApiToken(
   }
 
   const scopes = getScopes(tokenInfo);
-  if (!scopes.includes(config.apiScope)) {
-    logApi("auth", `insufficient scope required=${config.apiScope} actual=${scopes.join(",")} claims=${summarizeValidatedClaims(tokenInfo)}`);
-    return sendAuthError(res, 403, `This action requires ${config.apiScope}.`);
+  if (!scopes.includes(requiredScope)) {
+    logApi("auth", `insufficient scope required=${requiredScope} actual=${scopes.join(",")} claims=${summarizeValidatedClaims(tokenInfo)}`);
+    return sendAuthError(res, 403, `This action requires ${requiredScope}.`);
   }
 
-  logApi("auth", `validated scope=${config.apiScope} scopes=${scopes.join(",")} claims=${summarizeValidatedClaims(tokenInfo)}`);
+  logApi("auth", `validated scope=${requiredScope} scopes=${scopes.join(",")} claims=${summarizeValidatedClaims(tokenInfo)}`);
   return { tokenInfo, scopes };
 }
 
@@ -507,7 +515,7 @@ export function assembleApiApp(config: ApiServerConfig): express.Application {
     const city = typeof req.query.city === "string" ? req.query.city : undefined;
     const memberRates = req.query.memberRates === "true";
     if (memberRates) {
-      const auth = await requireApiToken(req, res, config);
+      const auth = await requireApiToken(req, res, config, config.apiMemberRatesScope);
       if (!auth) {
         return;
       }
@@ -518,7 +526,7 @@ export function assembleApiApp(config: ApiServerConfig): express.Application {
   });
 
   app.post("/booking-intents", async (req, res) => {
-    const auth = await requireApiToken(req, res, config);
+    const auth = await requireApiToken(req, res, config, config.apiBookScope);
     if (!auth) {
       return;
     }
@@ -578,7 +586,7 @@ export function assembleApiApp(config: ApiServerConfig): express.Application {
   });
 
   app.get("/booking-intents/:transactionId", async (req, res) => {
-    const auth = await requireApiToken(req, res, config);
+    const auth = await requireApiToken(req, res, config, config.apiBookScope);
     if (!auth) {
       return;
     }

@@ -181,7 +181,7 @@ async function main() {
     tokenEndpoint: process.env.CIBA_TOKEN_ENDPOINT || `${authServerUrl}/token`,
     clientId: required('CIBA_CLIENT_ID'),
     clientSecret: required('CIBA_CLIENT_SECRET'),
-    scope: process.env.CIBA_SCOPE || `openid ${process.env.API_SCOPE || process.env.MCP_SCOPE || 'hotels:member_access'}`,
+    scope: process.env.CIBA_SCOPE || `openid ${process.env.API_BOOK_SCOPE || process.env.MCP_BOOK_SCOPE || 'my-hotels:api:book'}`,
     acrValues: process.env.CIBA_ACR_VALUES,
     requestedExpiry: optionalInt('CIBA_REQUESTED_EXPIRY'),
     bindingMessage: createBindingMessage(),

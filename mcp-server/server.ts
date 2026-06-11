@@ -23,11 +23,13 @@ export interface Config {
   authJwksUrl: string;
   tokenEndpoint: string;
   mcpAudience: string;
-  mcpScope: string;
+  mcpMemberRatesScope: string;
+  mcpBookScope: string;
   mcpClientId: string;
   mcpClientSecret: string;
   apiAudience: string;
-  apiScope: string;
+  apiMemberRatesScope: string;
+  apiBookScope: string;
 }
 
 /** Reads the built widget markup used by the local browser route and MCP resource. */
@@ -45,11 +47,13 @@ function loadConfig(): Config {
   const apiBaseUrl = process.env.API_BASE_URL;
   const authServerUrl = process.env.AUTH_SERVER_URL;
   const mcpAudience = process.env.MCP_AUDIENCE;
-  const mcpScope = process.env.MCP_SCOPE;
+  const mcpMemberRatesScope = process.env.MCP_MEMBER_RATES_SCOPE;
+  const mcpBookScope = process.env.MCP_BOOK_SCOPE;
   const mcpClientId = process.env.MCP_CLIENT_ID;
   const mcpClientSecret = process.env.MCP_CLIENT_SECRET;
   const apiAudience = process.env.API_AUDIENCE;
-  const apiScope = process.env.API_SCOPE;
+  const apiMemberRatesScope = process.env.API_MEMBER_RATES_SCOPE;
+  const apiBookScope = process.env.API_BOOK_SCOPE;
 
   if (!mcpPort) {
     throw new Error('MCP_PORT environment variable is required');
@@ -67,8 +71,12 @@ function loadConfig(): Config {
     throw new Error('MCP_AUDIENCE environment variable is required');
   }
 
-  if (!mcpScope) {
-    throw new Error('MCP_SCOPE environment variable is required');
+  if (!mcpMemberRatesScope) {
+    throw new Error('MCP_MEMBER_RATES_SCOPE environment variable is required');
+  }
+
+  if (!mcpBookScope) {
+    throw new Error('MCP_BOOK_SCOPE environment variable is required');
   }
 
   if (!mcpClientId) {
@@ -83,8 +91,12 @@ function loadConfig(): Config {
     throw new Error('API_AUDIENCE environment variable is required');
   }
 
-  if (!apiScope) {
-    throw new Error('API_SCOPE environment variable is required');
+  if (!apiMemberRatesScope) {
+    throw new Error('API_MEMBER_RATES_SCOPE environment variable is required');
+  }
+
+  if (!apiBookScope) {
+    throw new Error('API_BOOK_SCOPE environment variable is required');
   }
 
   const port = parseInt(mcpPort, 10);
@@ -106,11 +118,13 @@ function loadConfig(): Config {
     authJwksUrl,
     tokenEndpoint,
     mcpAudience,
-    mcpScope,
+    mcpMemberRatesScope,
+    mcpBookScope,
     mcpClientId,
     mcpClientSecret,
     apiAudience,
-    apiScope,
+    apiMemberRatesScope,
+    apiBookScope,
   };
 }
 
@@ -325,7 +339,7 @@ export function assembleTransportApp(config: Config): express.Application {
     res.json({
       resource: `${baseUrl}/mcp`,
       authorization_servers: [config.authServerUrl],
-      scopes_supported: [config.mcpScope],
+      scopes_supported: [config.mcpMemberRatesScope, config.mcpBookScope],
     });
   });
 

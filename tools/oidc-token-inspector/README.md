@@ -46,7 +46,7 @@ Default values shown in the page:
 ```text
 client_id: OIDC_INSPECTOR_CLIENT_ID or MCP_CLIENT_ID
 client_secret: OIDC_INSPECTOR_CLIENT_SECRET or MCP_CLIENT_SECRET
-scope: openid profile offline_access <MCP_SCOPE>
+scope: openid profile offline_access <MCP_MEMBER_RATES_SCOPE> <MCP_BOOK_SCOPE>
 audience: OIDC_INSPECTOR_AUDIENCE or MCP_AUDIENCE
 ```
 

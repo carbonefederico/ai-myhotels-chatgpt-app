@@ -55,15 +55,15 @@ function buildClientBasicAuth(config: Config): string {
 }
 
 /** Exchanges the ChatGPT-facing access token for a backend API access token. */
-async function exchangeBackendAccessToken(config: Config, subjectToken: string): Promise<string> {
-  const cacheKey = `${subjectToken}:${config.apiAudience}:${config.apiScope}`;
+async function exchangeBackendAccessToken(config: Config, subjectToken: string, apiScope: string): Promise<string> {
+  const cacheKey = `${subjectToken}:${config.apiAudience}:${apiScope}`;
   const now = Date.now();
   const cached = backendTokenCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
     const cachedClaims = decodeJwtClaimsForLogging(cached.accessToken);
     logInfo(
       ["mcp", "token-exchange"],
-      `cache hit audience=${config.apiAudience} scope=${config.apiScope} cachedToken=${redactToken(cached.accessToken)}`
+      `cache hit audience=${config.apiAudience} scope=${apiScope} cachedToken=${redactToken(cached.accessToken)}`
     );
     if (cachedClaims) {
       logInfo(["mcp", "token-exchange"], `cached backend token claims=\n${prettyJson(cachedClaims)}`);
@@ -74,7 +74,7 @@ async function exchangeBackendAccessToken(config: Config, subjectToken: string):
   const subjectTokenClaims = decodeJwtClaimsForLogging(subjectToken);
   logInfo(
     ["mcp", "token-exchange"],
-    `requesting audience=${config.apiAudience} scope=${config.apiScope} subjectToken=${redactToken(subjectToken)}`
+    `requesting audience=${config.apiAudience} scope=${apiScope} subjectToken=${redactToken(subjectToken)}`
   );
   if (subjectTokenClaims) {
     logInfo(["mcp", "token-exchange"], `subject token claims=\n${prettyJson(subjectTokenClaims)}`);
@@ -86,7 +86,7 @@ async function exchangeBackendAccessToken(config: Config, subjectToken: string):
     subject_token_type: "urn:ietf:params:oauth:token-type:access_token",
     requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
     audience: config.apiAudience,
-    scope: config.apiScope,
+    scope: apiScope,
   });
 
   const response = await fetch(config.tokenEndpoint, {
@@ -132,8 +132,12 @@ async function exchangeBackendAccessToken(config: Config, subjectToken: string):
 }
 
 /** Builds an Authorization header for backend calls that require an exchanged API token. */
-async function buildBackendAuthHeaders(config: Config, subjectToken: string): Promise<Record<string, string>> {
-  const backendAccessToken = await exchangeBackendAccessToken(config, subjectToken);
+async function buildBackendAuthHeaders(
+  config: Config,
+  subjectToken: string,
+  apiScope: string
+): Promise<Record<string, string>> {
+  const backendAccessToken = await exchangeBackendAccessToken(config, subjectToken, apiScope);
   return {
     Authorization: `Bearer ${backendAccessToken}`,
   };
@@ -152,7 +156,7 @@ export async function fetchHotels(
 
   const headers =
     options.memberRates && options.subjectToken
-      ? await buildBackendAuthHeaders(config, options.subjectToken)
+      ? await buildBackendAuthHeaders(config, options.subjectToken, config.apiMemberRatesScope)
       : undefined;
 
   const payload = await handleJsonResponse<HotelSearchResponse>(await fetch(url, { headers }));
@@ -169,7 +173,7 @@ export async function createBookingIntent(
     subjectToken: string;
   }
 ): Promise<BookingApproval> {
-  const headers = await buildBackendAuthHeaders(config, input.subjectToken);
+  const headers = await buildBackendAuthHeaders(config, input.subjectToken, config.apiBookScope);
   const response = await fetch(new URL("/booking-intents", config.apiBaseUrl), {
     method: "POST",
     headers: {
@@ -196,7 +200,7 @@ export async function getBookingIntentStatus(
   }
 ): Promise<BookingApproval> {
   const url = new URL(`/booking-intents/${input.transactionId}`, config.apiBaseUrl);
-  const headers = await buildBackendAuthHeaders(config, input.subjectToken);
+  const headers = await buildBackendAuthHeaders(config, input.subjectToken, config.apiBookScope);
 
   const payload = await handleJsonResponse<BookingIntentResponse>(await fetch(url, { headers }));
   return payload.bookingIntent;

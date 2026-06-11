@@ -71,7 +71,8 @@ export function mountWidgetResources(server: McpServer): void {
 
 /** Registers the public and protected MCP tools used by the widget and ChatGPT runtime. */
 export function mountMcpTools(server: McpServer, config: Config): void {
-  const mcpScope = config.mcpScope;
+  const memberRatesScope = config.mcpMemberRatesScope;
+  const bookScope = config.mcpBookScope;
 
   logInfo(
     ['mcp', 'tools'],
@@ -106,7 +107,7 @@ export function mountMcpTools(server: McpServer, config: Config): void {
   server.registerTool(
     "search_hotels_member_rates",
     {
-      description: `Search hotels with member pricing. Requires a token with ${mcpScope}.`,
+      description: `Search hotels with member pricing. Requires a token with ${memberRatesScope}.`,
       inputSchema: z.object({
         city: z.string().optional().describe("City name to search for hotels"),
       }),
@@ -117,13 +118,13 @@ export function mountMcpTools(server: McpServer, config: Config): void {
         "openai/widgetAccessible": true,
         "openai/visibility": "public",
         securitySchemes: [
-          { type: "oauth2", scopes: [mcpScope] },
+          { type: "oauth2", scopes: [memberRatesScope] },
         ],
       },
     },
     async ({ city }: { city?: string }) => {
       logInfo(['tool'], `search_hotels_member_rates called city=${city ?? ''}`);
-      const auth = await requireTokenWithScope(config, mcpScope);
+      const auth = await requireTokenWithScope(config, memberRatesScope);
       if (!auth.ok) {
         logInfo(['tool'], 'search_hotels_member_rates auth requirement not satisfied');
         return auth.response;
@@ -131,7 +132,7 @@ export function mountMcpTools(server: McpServer, config: Config): void {
       const { accessToken, tokenInfo, scopes } = auth;
       const authenticatedUser = deriveAuthenticatedUser(tokenInfo);
 
-      logInfo(['auth'], `validated scope=${mcpScope} scopes=${scopes.join(', ')} claims=${summarizeTokenClaims(tokenInfo)}`);
+      logInfo(['auth'], `validated scope=${memberRatesScope} scopes=${scopes.join(', ')} claims=${summarizeTokenClaims(tokenInfo)}`);
 
       const results = await fetchHotels(config, { city, memberRates: true, subjectToken: accessToken });
       return withAuthenticatedUser(
@@ -157,19 +158,19 @@ export function mountMcpTools(server: McpServer, config: Config): void {
         "openai/widgetAccessible": true,
         "openai/visibility": "public",
         securitySchemes: [
-          { type: "oauth2", scopes: [mcpScope] },
+          { type: "oauth2", scopes: [bookScope] },
         ],
       },
     },
     async ({ hotelId, startDate, nights }: { hotelId: string; startDate: string; nights: number }) => {
       logInfo(['tool'], `prepare_booking called hotelId=${hotelId} startDate=${startDate} nights=${nights}`);
-      const auth = await requireTokenWithScope(config, mcpScope);
+      const auth = await requireTokenWithScope(config, bookScope);
       if (!auth.ok) {
         logInfo(['tool'], 'prepare_booking auth requirement not satisfied');
         return auth.response;
       }
       const { accessToken, tokenInfo, scopes } = auth;
-      logInfo(['auth'], `validated scope=${mcpScope} scopes=${scopes.join(', ')} claims=${summarizeTokenClaims(tokenInfo)}`);
+      logInfo(['auth'], `validated scope=${bookScope} scopes=${scopes.join(', ')} claims=${summarizeTokenClaims(tokenInfo)}`);
       const authenticatedUser = deriveAuthenticatedUser(tokenInfo);
 
       if (!tokenInfo.sub) {
@@ -189,7 +190,7 @@ export function mountMcpTools(server: McpServer, config: Config): void {
       });
 
       return withAuthenticatedUser(
-        formatBookingIntentResponse(bookingIntent, config.mcpScope),
+        formatBookingIntentResponse(bookingIntent, bookScope),
         authenticatedUser
       );
     }
@@ -209,18 +210,18 @@ export function mountMcpTools(server: McpServer, config: Config): void {
         "openai/widgetAccessible": true,
         "openai/visibility": "public",
         securitySchemes: [
-          { type: "oauth2", scopes: [mcpScope] },
+          { type: "oauth2", scopes: [bookScope] },
         ],
       },
     },
     async ({ transactionId }: { transactionId: string }) => {
       logInfo(['tool'], `get_booking_status called transactionId=${transactionId}`);
-      const auth = await requireTokenWithScope(config, mcpScope);
+      const auth = await requireTokenWithScope(config, bookScope);
       if (!auth.ok) {
         logInfo(['tool'], 'get_booking_status auth requirement not satisfied');
         return auth.response;
       }
-      logInfo(['auth'], `validated scope=${mcpScope} scopes=${auth.scopes.join(', ')} claims=${summarizeTokenClaims(auth.tokenInfo)}`);
+      logInfo(['auth'], `validated scope=${bookScope} scopes=${auth.scopes.join(', ')} claims=${summarizeTokenClaims(auth.tokenInfo)}`);
       const authenticatedUser = deriveAuthenticatedUser(auth.tokenInfo);
 
       if (!auth.tokenInfo.sub) {
@@ -238,7 +239,7 @@ export function mountMcpTools(server: McpServer, config: Config): void {
           subjectToken: auth.accessToken,
         });
         return withAuthenticatedUser(
-          formatBookingIntentResponse(bookingIntent, config.mcpScope),
+          formatBookingIntentResponse(bookingIntent, bookScope),
           authenticatedUser
         );
       } catch (error) {
