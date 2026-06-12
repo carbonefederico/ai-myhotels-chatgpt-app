@@ -1,12 +1,11 @@
 /**
- * Backend REST service for hotel search, booking-intent creation, and CIBA-backed approval polling.
+ * Backend REST service for hotel search, booking-intent creation, and booking confirmation.
  */
 import "dotenv/config";
 import express, { Request, Response } from "express";
 import { randomUUID } from "crypto";
 import { hotels, searchHotels } from "./data/hotels.js";
 import {
-  decodeJwtClaimsForLogging,
   summarizeValidatedClaims,
   validateJwtToken,
   type JwtValidationConfig,
@@ -27,51 +26,7 @@ interface ApiServerConfig {
   apiAudience: string;
   apiMemberRatesScope: string;
   apiBookScope: string;
-  cibaAuthorizationEndpoint: string;
-  cibaTokenEndpoint: string;
-  cibaClientId: string;
-  cibaClientSecret: string;
-  cibaScope: string;
-  cibaAcrValues?: string;
-  cibaRequestedExpiry?: number;
 }
-
-interface CibaAuthorizationResponse {
-  auth_req_id: string;
-  expires_in: number;
-  interval?: number;
-}
-
-interface CibaPendingResponse {
-  error: "authorization_pending" | "slow_down";
-  error_description?: string;
-}
-
-interface CibaTerminalErrorResponse {
-  error:
-    | "access_denied"
-    | "expired_token"
-    | "invalid_grant"
-    | "invalid_request"
-    | "invalid_client"
-    | "unauthorized_client";
-  error_description?: string;
-}
-
-interface CibaApprovedResponse {
-  access_token: string;
-  token_type?: string;
-  expires_in?: number;
-  refresh_token?: string;
-  id_token?: string;
-  scope?: string;
-}
-
-type CibaTokenPollResponse =
-  | { kind: "approved"; tokens: CibaApprovedResponse }
-  | { kind: "pending"; error: CibaPendingResponse["error"]; errorDescription?: string }
-  | { kind: "denied"; errorDescription?: string }
-  | { kind: "expired"; errorDescription?: string };
 
 const bookingIntents = new Map<string, BookingIntent>();
 
@@ -130,9 +85,6 @@ function loadConfig(): ApiServerConfig {
   const apiAudience = process.env.API_AUDIENCE;
   const apiMemberRatesScope = process.env.API_MEMBER_RATES_SCOPE;
   const apiBookScope = process.env.API_BOOK_SCOPE;
-  const cibaClientId = process.env.CIBA_CLIENT_ID;
-  const cibaClientSecret = process.env.CIBA_CLIENT_SECRET;
-  const cibaScope = process.env.CIBA_SCOPE;
 
   if (!apiPort) {
     throw new Error("API_PORT environment variable is required");
@@ -154,28 +106,12 @@ function loadConfig(): ApiServerConfig {
     throw new Error("API_BOOK_SCOPE environment variable is required");
   }
 
-  if (!cibaScope) {
-    throw new Error("CIBA_SCOPE environment variable is required");
-  }
-
   const port = parseInt(apiPort, 10);
   const authIssuer = authServerUrl;
   const authJwksUrl = `${authIssuer}/jwks`;
-  const cibaAuthorizationEndpoint = `${authServerUrl}/cibaAuthorization`;
-  const cibaTokenEndpoint = `${authServerUrl}/token`;
-  const cibaAcrValues = undefined;
-  const cibaRequestedExpiry = undefined;
 
   if (Number.isNaN(port)) {
     throw new Error("API_PORT environment variable must be a valid integer");
-  }
-
-  if (!cibaClientId) {
-    throw new Error("CIBA_CLIENT_ID environment variable is required");
-  }
-
-  if (!cibaClientSecret) {
-    throw new Error("CIBA_CLIENT_SECRET environment variable is required");
   }
 
   return {
@@ -186,13 +122,6 @@ function loadConfig(): ApiServerConfig {
     apiAudience,
     apiMemberRatesScope,
     apiBookScope,
-    cibaAuthorizationEndpoint,
-    cibaTokenEndpoint,
-    cibaClientId,
-    cibaClientSecret,
-    cibaScope,
-    cibaAcrValues,
-    cibaRequestedExpiry,
   };
 }
 
@@ -292,70 +221,6 @@ function attachApiTransportLogging(app: express.Application): void {
   });
 }
 
-/** Creates the Basic authorization header value used for PingOne CIBA calls. */
-function buildBasicAuth(config: ApiServerConfig): string {
-  return Buffer.from(`${config.cibaClientId}:${config.cibaClientSecret}`).toString("base64");
-}
-
-/** Generates the short approval code shown to the user during the CIBA flow. */
-function createApprovalBindingMessage(): string {
-  return randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
-}
-
-/** Starts a new backchannel approval request for a booking intent. */
-async function requestApprovalSession(
-  config: ApiServerConfig,
-  input: {
-    loginHint: string;
-    bindingMessage: string;
-    scope?: string;
-    customParameters?: Record<string, string>;
-  }
-): Promise<CibaAuthorizationResponse> {
-  const params = new URLSearchParams({
-    scope: input.scope || config.cibaScope,
-    login_hint: input.loginHint,
-    binding_message: input.bindingMessage,
-  });
-
-  if (input.customParameters) {
-    for (const [key, value] of Object.entries(input.customParameters)) {
-      params.set(key, value);
-    }
-  }
-
-  if (config.cibaAcrValues) {
-    params.set("acr_values", config.cibaAcrValues);
-  }
-
-  if (config.cibaRequestedExpiry !== undefined) {
-    params.set("requested_expiry", String(config.cibaRequestedExpiry));
-  }
-
-  const response = await fetch(config.cibaAuthorizationEndpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${buildBasicAuth(config)}`,
-    },
-    body: params.toString(),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(
-      `CIBA authorization request failed: ${response.status} ${response.statusText} ${errorBody}`
-    );
-  }
-
-  const payload = (await response.json()) as CibaAuthorizationResponse;
-  logApi(
-    "ciba",
-    `authorization created authReqId=${payload.auth_req_id} expiresIn=${payload.expires_in} interval=${payload.interval ?? ""}`
-  );
-  return payload;
-}
-
 /** Splits the space-delimited OAuth scope claim into a normalized array. */
 function getScopes(tokenInfo: ValidatedTokenClaims): string[] {
   return tokenInfo.scope ? tokenInfo.scope.split(" ") : [];
@@ -418,66 +283,6 @@ async function requireApiToken(
   return { tokenInfo, scopes };
 }
 
-/** Polls the token endpoint for the current state of a backchannel approval request. */
-async function pollApprovalSession(
-  config: ApiServerConfig,
-  authRequestId: string
-): Promise<CibaTokenPollResponse> {
-  const params = new URLSearchParams({
-    grant_type: "urn:openid:params:grant-type:ciba",
-    auth_req_id: authRequestId,
-  });
-
-  const response = await fetch(config.cibaTokenEndpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${buildBasicAuth(config)}`,
-    },
-    body: params.toString(),
-  });
-
-  if (response.ok) {
-    const tokens = (await response.json()) as CibaApprovedResponse;
-    const accessTokenClaims = decodeJwtClaimsForLogging(tokens.access_token);
-    if (accessTokenClaims) {
-      logApi("ciba", `approved accessTokenClaims=${JSON.stringify(accessTokenClaims)}`);
-    } else {
-      logApi("ciba", "approved access token is not a readable JWT");
-    }
-
-    const idTokenClaims = tokens.id_token ? decodeJwtClaimsForLogging(tokens.id_token) : null;
-    if (idTokenClaims) {
-      logApi("ciba", `approved idTokenClaims=${JSON.stringify(idTokenClaims)}`);
-    } else if (tokens.id_token) {
-      logApi("ciba", "approved id token is not a readable JWT");
-    }
-
-    return { kind: "approved", tokens };
-  }
-
-  const errorBody = (await response.json()) as CibaPendingResponse | CibaTerminalErrorResponse;
-
-  switch (errorBody.error) {
-    case "authorization_pending":
-    case "slow_down":
-      return {
-        kind: "pending",
-        error: errorBody.error,
-        errorDescription: errorBody.error_description,
-      };
-    case "access_denied":
-      return { kind: "denied", errorDescription: errorBody.error_description };
-    case "expired_token":
-    case "invalid_grant":
-      return { kind: "expired", errorDescription: errorBody.error_description };
-    default:
-      throw new Error(
-        `CIBA token polling failed: ${response.status} ${response.statusText} ${errorBody.error}`
-      );
-  }
-}
-
 /** Serializes internal booking-intent state into the public API response shape. */
 function serializeBookingIntent(bookingIntent: BookingIntent): BookingIntentResponse {
   return {
@@ -485,7 +290,6 @@ function serializeBookingIntent(bookingIntent: BookingIntent): BookingIntentResp
       transactionId: bookingIntent.transactionId,
       hotelId: bookingIntent.hotelId,
       hotelName: bookingIntent.hotelName,
-      bindingMessage: bookingIntent.bindingMessage,
       startDate: bookingIntent.startDate,
       nights: bookingIntent.nights,
       nightlyRate: bookingIntent.nightlyRate,
@@ -493,10 +297,8 @@ function serializeBookingIntent(bookingIntent: BookingIntent): BookingIntentResp
       currency: bookingIntent.currency,
       status: bookingIntent.status,
       updatedAt: bookingIntent.updatedAt,
-      pollIntervalSeconds: bookingIntent.pollIntervalSeconds,
-      approvalCompletedAt: bookingIntent.approvalCompletedAt,
-      approvedScopes: bookingIntent.approvedScopes,
-      hasRefreshToken: bookingIntent.hasRefreshToken,
+      backendBookingId: bookingIntent.backendBookingId,
+      confirmedAt: bookingIntent.confirmedAt,
     },
   };
 }
@@ -545,27 +347,10 @@ export function assembleApiApp(config: ApiServerConfig): express.Application {
     }
 
     const transactionId = randomUUID();
-    const bindingMessage = createApprovalBindingMessage();
-    const cibaResponse = await requestApprovalSession(config, {
-      loginHint: ownerSub,
-      bindingMessage,
-      customParameters: {
-        transaction_id: transactionId,
-        hotel_id: quote.hotelId,
-        hotel_name: quote.hotelName,
-        check_in_date: body.startDate,
-        nights: String(body.nights),
-        amount: quote.totalPrice.toFixed(2),
-        currency: quote.currency,
-      },
-    });
-
     const now = Date.now();
     const bookingIntent: BookingIntent = {
       transactionId,
       ownerSub,
-      authRequestId: cibaResponse.auth_req_id,
-      bindingMessage,
       hotelId: quote.hotelId,
       hotelName: quote.hotelName,
       startDate: quote.startDate,
@@ -573,12 +358,9 @@ export function assembleApiApp(config: ApiServerConfig): express.Application {
       nightlyRate: quote.nightlyRate,
       totalPrice: quote.totalPrice,
       currency: quote.currency,
-      status: "pending_user_approval",
+      status: "pending",
       createdAt: new Date(now).toISOString(),
       updatedAt: new Date(now).toISOString(),
-      pollIntervalSeconds: cibaResponse.interval ?? 2,
-      nextPollAt: now + (cibaResponse.interval ?? 2) * 1000,
-      expiresAt: now + cibaResponse.expires_in * 1000,
     };
 
     bookingIntents.set(transactionId, bookingIntent);
@@ -605,83 +387,45 @@ export function assembleApiApp(config: ApiServerConfig): express.Application {
       return;
     }
 
-    if (bookingIntent.status !== "pending_user_approval") {
+    res.json(serializeBookingIntent(bookingIntent));
+  });
+
+  app.post("/booking-intents/:transactionId/confirm", async (req, res) => {
+    const auth = await requireApiToken(req, res, config, config.apiBookScope);
+    if (!auth) {
+      return;
+    }
+
+    const transactionId = req.params.transactionId;
+    const ownerSub = auth.tokenInfo.sub;
+
+    if (!ownerSub) {
+      res.status(400).json({ error: "Signed-in user could not be identified." });
+      return;
+    }
+
+    const bookingIntent = bookingIntents.get(transactionId);
+    if (!bookingIntent || bookingIntent.ownerSub !== ownerSub) {
+      res.status(404).json({ error: "Booking intent not found" });
+      return;
+    }
+
+    if (bookingIntent.status === "confirmed") {
       res.json(serializeBookingIntent(bookingIntent));
       return;
     }
 
-    const now = Date.now();
-    if (now >= bookingIntent.expiresAt) {
-      const expiredBookingIntent: BookingIntent = {
-        ...bookingIntent,
-        status: "expired",
-        updatedAt: new Date(now).toISOString(),
-      };
-      bookingIntents.set(transactionId, expiredBookingIntent);
-      res.json(serializeBookingIntent(expiredBookingIntent));
-      return;
-    }
-
-    if (now < bookingIntent.nextPollAt) {
-      res.json(serializeBookingIntent(bookingIntent));
-      return;
-    }
-
-    const cibaStatus = await pollApprovalSession(config, bookingIntent.authRequestId);
-
-    if (cibaStatus.kind === "approved") {
-      const approvalCompletedAt = new Date(now).toISOString();
-
-      const approvedBookingIntent: BookingIntent = {
-        ...bookingIntent,
-        status: "approved",
-        updatedAt: new Date(now).toISOString(),
-        approvalCompletedAt,
-        approvedScopes: cibaStatus.tokens.scope,
-        tokenExpiresIn: cibaStatus.tokens.expires_in,
-        hasRefreshToken: Boolean(cibaStatus.tokens.refresh_token),
-        backendBookingId: randomUUID(),
-      };
-      bookingIntents.set(transactionId, approvedBookingIntent);
-      res.json(serializeBookingIntent(approvedBookingIntent));
-      return;
-    }
-
-    if (cibaStatus.kind === "denied") {
-      const deniedBookingIntent: BookingIntent = {
-        ...bookingIntent,
-        status: "denied",
-        updatedAt: new Date(now).toISOString(),
-      };
-      bookingIntents.set(transactionId, deniedBookingIntent);
-      res.json(serializeBookingIntent(deniedBookingIntent));
-      return;
-    }
-
-    if (cibaStatus.kind === "expired") {
-      const expiredBookingIntent: BookingIntent = {
-        ...bookingIntent,
-        status: "expired",
-        updatedAt: new Date(now).toISOString(),
-      };
-      bookingIntents.set(transactionId, expiredBookingIntent);
-      res.json(serializeBookingIntent(expiredBookingIntent));
-      return;
-    }
-
-    const nextIntervalSeconds =
-      cibaStatus.error === "slow_down"
-        ? bookingIntent.pollIntervalSeconds + 5
-        : bookingIntent.pollIntervalSeconds;
-
-    const pendingBookingIntent: BookingIntent = {
+    const now = new Date().toISOString();
+    const confirmedBookingIntent: BookingIntent = {
       ...bookingIntent,
-      pollIntervalSeconds: nextIntervalSeconds,
-      nextPollAt: now + nextIntervalSeconds * 1000,
-      updatedAt: new Date(now).toISOString(),
+      status: "confirmed",
+      updatedAt: now,
+      confirmedAt: now,
+      backendBookingId: randomUUID(),
     };
-    bookingIntents.set(transactionId, pendingBookingIntent);
-    res.json(serializeBookingIntent(pendingBookingIntent));
+
+    bookingIntents.set(transactionId, confirmedBookingIntent);
+    res.json(serializeBookingIntent(confirmedBookingIntent));
   });
 
   return app;

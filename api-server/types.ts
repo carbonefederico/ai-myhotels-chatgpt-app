@@ -43,29 +43,14 @@ export interface ApiErrorResponse {
   error: string;
 }
 
-export interface BookingIntent {
+export interface BookingIntent extends BookingQuote {
   transactionId: string;
   ownerSub: string;
-  authRequestId: string;
-  bindingMessage: string;
-  hotelId: string;
-  hotelName: string;
-  startDate: string;
-  nights: number;
-  nightlyRate: number;
-  totalPrice: number;
-  currency: string;
-  status: "pending_user_approval" | "approved" | "denied" | "expired";
+  status: "pending" | "confirmed";
   createdAt: string;
   updatedAt: string;
-  pollIntervalSeconds: number;
-  nextPollAt: number;
-  expiresAt: number;
-  approvalCompletedAt?: string;
-  approvedScopes?: string;
-  tokenExpiresIn?: number;
-  hasRefreshToken?: boolean;
   backendBookingId?: string;
+  confirmedAt?: string;
 }
 
 export interface BookingIntentResponse {
@@ -73,7 +58,6 @@ export interface BookingIntentResponse {
     transactionId: string;
     hotelId: string;
     hotelName: string;
-    bindingMessage: string;
     startDate: string;
     nights: number;
     nightlyRate: number;
@@ -81,9 +65,7 @@ export interface BookingIntentResponse {
     currency: string;
     status: string;
     updatedAt: string;
-    pollIntervalSeconds: number;
-    approvalCompletedAt?: string;
-    approvedScopes?: string;
-    hasRefreshToken?: boolean;
+    backendBookingId?: string;
+    confirmedAt?: string;
   };
 }

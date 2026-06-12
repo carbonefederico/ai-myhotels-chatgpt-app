@@ -30,6 +30,13 @@ export interface Config {
   apiAudience: string;
   apiMemberRatesScope: string;
   apiBookScope: string;
+  cibaAuthorizationEndpoint: string;
+  cibaTokenEndpoint: string;
+  cibaClientId: string;
+  cibaClientSecret: string;
+  cibaScope: string;
+  cibaAcrValues?: string;
+  cibaRequestedExpiry?: number;
 }
 
 /** Reads the built widget markup used by the local browser route and MCP resource. */
@@ -54,6 +61,9 @@ function loadConfig(): Config {
   const apiAudience = process.env.API_AUDIENCE;
   const apiMemberRatesScope = process.env.API_MEMBER_RATES_SCOPE;
   const apiBookScope = process.env.API_BOOK_SCOPE;
+  const cibaClientId = process.env.CIBA_CLIENT_ID;
+  const cibaClientSecret = process.env.CIBA_CLIENT_SECRET;
+  const cibaScope = process.env.CIBA_SCOPE;
 
   if (!mcpPort) {
     throw new Error('MCP_PORT environment variable is required');
@@ -99,11 +109,25 @@ function loadConfig(): Config {
     throw new Error('API_BOOK_SCOPE environment variable is required');
   }
 
+  if (!cibaClientId) {
+    throw new Error('CIBA_CLIENT_ID environment variable is required');
+  }
+
+  if (!cibaClientSecret) {
+    throw new Error('CIBA_CLIENT_SECRET environment variable is required');
+  }
+
+  if (!cibaScope) {
+    throw new Error('CIBA_SCOPE environment variable is required');
+  }
+
   const port = parseInt(mcpPort, 10);
   const publicUrl = process.env.PUBLIC_URL;
   const authIssuer = authServerUrl;
   const authJwksUrl = `${authIssuer}/jwks`;
   const tokenEndpoint = `${authIssuer}/token`;
+  const cibaAuthorizationEndpoint = `${authServerUrl}/cibaAuthorization`;
+  const cibaTokenEndpoint = `${authServerUrl}/token`;
 
   if (Number.isNaN(port)) {
     throw new Error('MCP_PORT environment variable must be a valid integer');
@@ -125,6 +149,11 @@ function loadConfig(): Config {
     apiAudience,
     apiMemberRatesScope,
     apiBookScope,
+    cibaAuthorizationEndpoint,
+    cibaTokenEndpoint,
+    cibaClientId,
+    cibaClientSecret,
+    cibaScope,
   };
 }
 

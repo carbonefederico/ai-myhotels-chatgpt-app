@@ -26,6 +26,7 @@ flowchart LR
         TOOLS["Tools"]
         RES["Resources\n(publishes Widget UI)"]
         AUTH["Token Validation / Exchange"]
+        APPROVAL["CIBA Approval\n(agent action consent)"]
         CLIENT["Backend API Client"]
     end
 
@@ -37,10 +38,11 @@ flowchart LR
     CORE --> WR
 
     TOOLS --> AUTH
+    TOOLS --> APPROVAL
     TOOLS --> CLIENT
     CLIENT --> API
     AUTH --> P1
-    API --> P1
+    APPROVAL --> P1
 ```
 
 ## Components
@@ -55,6 +57,7 @@ The MCP server is the ChatGPT-facing integration layer. It:
 - serves the widget resource that ChatGPT later mounts in its own widget runtime
 - validates bearer tokens locally using PingOne-issued JWTs and JWKS
 - performs OAuth token exchange before protected backend API calls
+- starts and polls CIBA approval for agent-initiated booking actions
 - calls the backend hotel REST API
 
 The widget is a single-file HTML app rendered in ChatGPT. It:
@@ -71,8 +74,9 @@ The backend API server owns the demo hotel business surface. It:
 - exposes REST JSON endpoints for hotel search and booking intents
 - stores the hotel catalog
 - returns booking quotes
-- starts and polls CIBA approval flows
-- holds booking-intent state in memory for the demo
+- creates pending booking transactions
+- confirms approved booking transactions
+- holds booking transaction state in memory for the demo
 
 For the demo it provides mock data with no persistent storage.
 
@@ -140,8 +144,8 @@ Security model:
 - MCP requires the `my-hotels:mcp:book` scope
 - MCP derives the booking owner from token `sub`
 - MCP exchanges the ChatGPT-facing token for a backend API token
-- MCP forwards the request to the backend API
-- backend creates the booking intent and starts CIBA
+- MCP creates a pending booking intent in the backend API
+- MCP starts the CIBA approval flow using the backend transaction ID
 
 ### `get_booking_status`
 
@@ -153,10 +157,9 @@ Purpose:
 Security model:
 - requires a valid bearer token
 - MCP requires the `my-hotels:mcp:book` scope
-- MCP exchanges the ChatGPT-facing token for a backend API token
 - booking status lookup requires both the exact `transactionId` and a bearer token whose `sub` matches the booking owner
-- MCP forwards the status request to the backend API
-- backend uses the stored `authRequestId` to poll PingOne until the transaction becomes `approved`, `denied`, or `expired`
+- MCP polls PingOne CIBA until the transaction becomes `approved`, `denied`, or `expired`
+- after approval, MCP exchanges the ChatGPT-facing token for a backend API token and confirms the backend booking intent
 
 ## Backend APIs
 
@@ -169,11 +172,12 @@ The main backend endpoints are:
   - when called with `memberRates=true`, requires a backend API token with `my-hotels:api:member_rates`
 - `POST /booking-intents`
   - creates a new booking intent for a specific hotel and stay request
-  - starts a CIBA authorization request with PingOne
   - requires a backend API token with `my-hotels:api:book`
 - `GET /booking-intents/:transactionId`
   - returns the current booking-intent status
-  - polls PingOne while approval is pending
+  - requires a backend API token with `my-hotels:api:book`
+- `POST /booking-intents/:transactionId/confirm`
+  - confirms an existing booking intent after MCP-owned user approval
   - requires a backend API token with `my-hotels:api:book`
 
 The backend API validates its own bearer tokens locally using JWT signature verification and JWKS. Those tokens are obtained by the MCP through OAuth token exchange.
@@ -187,12 +191,13 @@ The current implementation uses a mixed model:
 - the MCP validates the incoming bearer token locally using JWT signature verification and JWKS
 - for protected backend calls, the MCP performs OAuth token exchange to obtain a backend API access token with the backend audience and the matching API scope
 - the backend API validates that exchanged token locally using JWT signature verification and JWKS
+- the MCP owns CIBA approval state for agent-initiated booking actions
+- the backend API owns booking transaction state and has no CIBA dependency
 - booking status lookup requires both:
   - the exact `transactionId`
-  - a bearer token whose `sub` matches the stored `ownerSub`
-- after the booking record is identified and ownership is confirmed, the backend uses the booking’s stored `authRequestId` to poll PingOne for the corresponding CIBA transaction
-- booking intents and approval state live in the backend API
-- the CIBA `auth_req_id` is kept server-side and is not trusted as a client-supplied lookup key
+  - a bearer token whose `sub` matches the MCP approval owner
+- after CIBA approval, the MCP confirms the backend booking intent through the backend API
+- the CIBA `auth_req_id` is kept in MCP memory and is not trusted as a client-supplied lookup key
 
 ## Runtime Behavior
 
@@ -231,11 +236,12 @@ Before the first user-driven tool call, ChatGPT initializes the MCP connection a
 2. Widget calls `prepare_booking`
 3. MCP validates the incoming token
 4. MCP exchanges it for a backend API token
-5. MCP forwards the booking request to the backend API
-6. Backend creates the booking intent, starts CIBA, and stores the pending approval transaction
-7. Widget polls `get_booking_status`
-8. MCP exchanges the token again if needed and forwards the poll request
-9. Backend polls PingOne and returns the updated booking-intent status
+5. MCP creates a pending booking intent in the backend API
+6. Backend returns the booking transaction ID and quote
+7. MCP starts CIBA approval with that transaction ID in the approval context
+8. Widget polls `get_booking_status`
+9. MCP polls PingOne for approval status
+10. After approval, MCP confirms the backend booking intent and returns the approved status
 
 ## Sequence Diagrams
 
@@ -305,9 +311,9 @@ sequenceDiagram
     MCP->>P1: token exchange
     P1-->>MCP: backend API token
     MCP->>API: POST /booking-intents
-    API->>P1: POST cibaAuthorization
-    P1-->>API: auth_req_id + expires_in + interval
-    API-->>MCP: bookingIntent pending
+    API-->>MCP: bookingIntent pending + transactionId
+    MCP->>P1: POST cibaAuthorization
+    P1-->>MCP: auth_req_id + expires_in + interval
     MCP-->>CG: bookingApproval pending
     CG->>W: provide tool result
 
@@ -315,12 +321,14 @@ sequenceDiagram
         W->>CG: window.openai.callTool("get_booking_status", ...)
         CG->>MCP: tools/call(get_booking_status)
         MCP->>MCP: validate token and verify ownerSub matches token.sub
-        MCP->>P1: token exchange
-        P1-->>MCP: backend API token
-        MCP->>API: GET /booking-intents/:transactionId
-        API->>P1: POST token (CIBA poll)
-        P1-->>API: pending or final state
-        API-->>MCP: bookingIntent update
+        MCP->>P1: POST token (CIBA poll)
+        P1-->>MCP: pending or final state
+        opt approved
+            MCP->>P1: token exchange
+            P1-->>MCP: backend API token
+            MCP->>API: POST /booking-intents/:transactionId/confirm
+            API-->>MCP: bookingIntent confirmed
+        end
         MCP-->>CG: bookingApproval update
         CG->>W: provide updated tool result
     end

@@ -140,6 +140,8 @@ export function formatBookingIntentResponse(booking: BookingApproval | null | un
         approvalCompletedAt: booking.approvalCompletedAt,
         approvedScopes: booking.approvedScopes,
         hasRefreshToken: booking.hasRefreshToken,
+        backendBookingId: booking.backendBookingId,
+        confirmedAt: booking.confirmedAt,
       },
     },
   };

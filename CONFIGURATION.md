@@ -123,7 +123,7 @@ Attach the backend API protected resource and enable:
 
 This scope must match `CIBA_SCOPE=openid my-hotels:api:book`. The CIBA client does not need the member-rates scope because it is used only for booking approval.
 
-This client is used only by the backend API server when it initiates and polls CIBA.
+This client is used only by the MCP server when it initiates and polls CIBA for agent-initiated booking approval.
 
 Use this application's credentials for:
 
@@ -136,7 +136,7 @@ This is a separate client from the MCP token-exchange client. Even though both u
   - used by the MCP server for OAuth token exchange
   - used to obtain backend API tokens
 - `CIBA_CLIENT_ID` / `CIBA_CLIENT_SECRET`
-  - used by the backend API for CIBA authorization and polling
+  - used by the MCP server for CIBA authorization and polling
   - used to start and complete the approval flow
 
 ## DaVinci Flow Setup
@@ -144,7 +144,7 @@ This is a separate client from the MCP token-exchange client. Even though both u
 This project expects two DaVinci flows:
 
 1. a user-authentication flow for ChatGPT access to the MCP protected resource
-2. a CIBA approval flow for the backend approval journey
+2. a CIBA approval flow for agent-initiated booking approval
 
 ### Add the exported flow JSON files to the repo
 
@@ -197,7 +197,7 @@ In PingOne:
   - DaVinci flow: none in this project setup
 
 - CIBA client
-  - used by backend API for CIBA
+  - used by MCP for agent-initiated booking approval
   - CIBA scope: `openid my-hotels:api:book`
   - DaVinci flow: `MyHotels CIBA Approval via Magic Link`
 
@@ -229,11 +229,11 @@ API_AUDIENCE=myhotels-hotelapi
 API_MEMBER_RATES_SCOPE=my-hotels:api:member_rates
 API_BOOK_SCOPE=my-hotels:api:book
 
-# PingOne CIBA client used by the backend API
+# PingOne CIBA client used by the MCP server
 CIBA_CLIENT_ID=<pingone-ciba-client-id>
 CIBA_CLIENT_SECRET=<pingone-ciba-client-secret>
 
-# CIBA scope used by the backend API
+# CIBA scope used by the MCP server
 CIBA_SCOPE=openid my-hotels:api:book
 ```
 
@@ -246,7 +246,7 @@ How these values are used:
   - member-rate search requests `API_MEMBER_RATES_SCOPE`
   - booking creation and status requests `API_BOOK_SCOPE`
 - The backend API validates that exchanged token locally with JWKS.
-- The backend API uses the separate CIBA client to start and poll approval sessions.
+- The MCP server uses the separate CIBA client to start and poll approval sessions.
 
 Important:
 

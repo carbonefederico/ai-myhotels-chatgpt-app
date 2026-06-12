@@ -6,7 +6,12 @@ import { z } from "zod";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { createBookingIntent, fetchHotels, getBookingIntentStatus } from "./api-client.js";
+import { confirmBookingIntent, createBookingIntent, fetchHotels } from "./api-client.js";
+import {
+  getBookingApprovalStatus,
+  markBookingApprovalConfirmed,
+  startBookingApproval,
+} from "./booking-approvals.js";
 import { requireTokenWithScope, summarizeTokenClaims } from "./auth/tool-auth.js";
 import { logInfo } from "./logging.js";
 import {
@@ -188,9 +193,13 @@ export function mountMcpTools(server: McpServer, config: Config): void {
         nights,
         subjectToken: accessToken,
       });
+      const bookingApproval = await startBookingApproval(config, {
+        bookingIntent,
+        ownerSub: tokenInfo.sub,
+      });
 
       return withAuthenticatedUser(
-        formatBookingIntentResponse(bookingIntent, bookScope),
+        formatBookingIntentResponse(bookingApproval, bookScope),
         authenticatedUser
       );
     }
@@ -234,12 +243,34 @@ export function mountMcpTools(server: McpServer, config: Config): void {
       }
 
       try {
-        const bookingIntent = await getBookingIntentStatus(config, {
+        const bookingApproval = await getBookingApprovalStatus(config, {
           transactionId,
-          subjectToken: auth.accessToken,
+          ownerSub: auth.tokenInfo.sub,
         });
+
+        if (!bookingApproval) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: "Booking request not found or no longer available.",
+            }],
+          };
+        }
+
+        if (bookingApproval.status === "approved" && !bookingApproval.backendBookingId) {
+          const confirmedBookingIntent = await confirmBookingIntent(config, {
+            transactionId,
+            subjectToken: auth.accessToken,
+          });
+          const confirmedApproval = markBookingApprovalConfirmed(confirmedBookingIntent) ?? bookingApproval;
+          return withAuthenticatedUser(
+            formatBookingIntentResponse(confirmedApproval, bookScope),
+            authenticatedUser
+          );
+        }
+
         return withAuthenticatedUser(
-          formatBookingIntentResponse(bookingIntent, bookScope),
+          formatBookingIntentResponse(bookingApproval, bookScope),
           authenticatedUser
         );
       } catch (error) {

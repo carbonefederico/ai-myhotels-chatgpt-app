@@ -3,7 +3,7 @@
  */
 import { logInfo } from "./logging.js";
 import type { Config } from "./server.js";
-import type { BookingApproval, Hotel } from "./types.js";
+import type { BackendBookingIntent, Hotel } from "./types.js";
 import { decodeJwtClaimsForLogging } from "../shared/jwt-validation.js";
 
 interface HotelSearchResponse {
@@ -11,7 +11,7 @@ interface HotelSearchResponse {
 }
 
 interface BookingIntentResponse {
-  bookingIntent: BookingApproval;
+  bookingIntent: BackendBookingIntent;
 }
 
 interface TokenExchangeResponse {
@@ -172,7 +172,7 @@ export async function createBookingIntent(
     nights: number;
     subjectToken: string;
   }
-): Promise<BookingApproval> {
+): Promise<BackendBookingIntent> {
   const headers = await buildBackendAuthHeaders(config, input.subjectToken, config.apiBookScope);
   const response = await fetch(new URL("/booking-intents", config.apiBaseUrl), {
     method: "POST",
@@ -191,17 +191,20 @@ export async function createBookingIntent(
   return payload.bookingIntent;
 }
 
-/** Fetches the current backend status for an existing booking intent. */
-export async function getBookingIntentStatus(
+/** Confirms a backend booking intent after MCP-owned CIBA approval completes. */
+export async function confirmBookingIntent(
   config: Config,
   input: {
     transactionId: string;
     subjectToken: string;
   }
-): Promise<BookingApproval> {
-  const url = new URL(`/booking-intents/${input.transactionId}`, config.apiBaseUrl);
+): Promise<BackendBookingIntent> {
+  const url = new URL(`/booking-intents/${input.transactionId}/confirm`, config.apiBaseUrl);
   const headers = await buildBackendAuthHeaders(config, input.subjectToken, config.apiBookScope);
 
-  const payload = await handleJsonResponse<BookingIntentResponse>(await fetch(url, { headers }));
+  const payload = await handleJsonResponse<BookingIntentResponse>(await fetch(url, {
+    method: "POST",
+    headers,
+  }));
   return payload.bookingIntent;
 }

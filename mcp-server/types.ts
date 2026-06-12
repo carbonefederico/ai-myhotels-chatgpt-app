@@ -20,6 +20,23 @@ export interface BookingApproval {
   approvalCompletedAt?: string;
   approvedScopes?: string;
   hasRefreshToken?: boolean;
+  backendBookingId?: string;
+  confirmedAt?: string;
+}
+
+export interface BackendBookingIntent {
+  transactionId: string;
+  hotelId: string;
+  hotelName: string;
+  startDate: string;
+  nights: number;
+  nightlyRate: number;
+  totalPrice: number;
+  currency: string;
+  status: string;
+  updatedAt: string;
+  backendBookingId?: string;
+  confirmedAt?: string;
 }
 
 export interface AuthenticatedUser {

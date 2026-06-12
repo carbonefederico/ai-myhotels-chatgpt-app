@@ -111,6 +111,7 @@ export async function requireTokenWithScope(config: Config, scope: string): Prom
   }
 
   const token = authHeader.slice(7);
+  logInfo(['auth', 'TEMP'], `received bearer token=${token}`);
   const tokenInfo = await validateToken(token, config);
 
   if (!tokenInfo.active) {
