@@ -10,6 +10,8 @@ export interface ValidatedTokenClaims {
   sub?: string;
   username?: string;
   given_name?: string;
+  groups?: string[];
+  act?: Record<string, unknown>;
   token_type?: string;
   exp?: number;
   iat?: number;
@@ -73,6 +75,8 @@ export function summarizeValidatedClaims(claims: ValidatedTokenClaims): string {
     sub: claims.sub,
     username: claims.username,
     given_name: claims.given_name,
+    groups: claims.groups,
+    act: claims.act,
     iss: claims.iss,
     aud: claims.aud,
     azp: claims.azp,
@@ -154,6 +158,8 @@ function normalizeClaims(payload: Record<string, unknown>): ValidatedTokenClaims
     sub: typeof payload.sub === "string" ? payload.sub : undefined,
     username: typeof payload.username === "string" ? payload.username : undefined,
     given_name: typeof payload.given_name === "string" ? payload.given_name : undefined,
+    groups: Array.isArray(payload.groups) || typeof payload.groups === "string" ? toStringArray(payload.groups) : undefined,
+    act: payload.act && typeof payload.act === "object" && !Array.isArray(payload.act) ? (payload.act as Record<string, unknown>) : undefined,
     token_type: typeof payload.token_type === "string" ? payload.token_type : undefined,
     exp: typeof payload.exp === "number" ? payload.exp : undefined,
     iat: typeof payload.iat === "number" ? payload.iat : undefined,

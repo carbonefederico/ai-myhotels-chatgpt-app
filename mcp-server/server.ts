@@ -19,8 +19,6 @@ export interface Config {
   publicUrl?: string;
   apiBaseUrl: string;
   authServerUrl: string;
-  authIssuer: string;
-  authJwksUrl: string;
   tokenEndpoint: string;
   mcpAudience: string;
   mcpMemberRatesScope: string;
@@ -37,12 +35,27 @@ export interface Config {
   cibaScope: string;
   cibaAcrValues?: string;
   cibaRequestedExpiry?: number;
+  authorizeDecisionEndpoint: string;
+  authorizeClientId: string;
+  authorizeClientSecret: string;
+}
+
+function resolveAssetUrl(config: Config, req: Request | undefined, assetPath: string): string {
+  const forwardedProto = req?.headers["x-forwarded-proto"];
+  const protocolHeader = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto;
+  const protocol = protocolHeader || req?.protocol;
+  const host = req?.get("host");
+  const requestBaseUrl = protocol && host ? `${protocol}://${host}` : undefined;
+  const baseUrl = (requestBaseUrl || config.publicUrl || `http://localhost:${config.port}`).replace(/\/$/, "");
+  const normalizedPath = assetPath.startsWith("/") ? assetPath : `/${assetPath}`;
+  return `${baseUrl}${normalizedPath}`;
 }
 
 /** Reads the built widget markup used by the local browser route and MCP resource. */
-function readWidgetMarkup(filename: string): string {
+function readWidgetMarkup(filename: string, config: Config, req?: Request): string {
   try {
-    return readFileSync(join(__dirname, '../widget-ui', filename), 'utf-8');
+    return readFileSync(join(__dirname, '../widget-ui', filename), 'utf-8')
+      .replace(/__MYHOTELS_LOGO_URL__/g, resolveAssetUrl(config, req, '/widget-assets/myhotels-logo.png'));
   } catch {
     return '<!DOCTYPE html><html><body><h1>UI not built yet. Run npm run build:ui</h1></body></html>';
   }
@@ -64,6 +77,9 @@ function loadConfig(): Config {
   const cibaClientId = process.env.CIBA_CLIENT_ID;
   const cibaClientSecret = process.env.CIBA_CLIENT_SECRET;
   const cibaScope = process.env.CIBA_SCOPE;
+  const authorizeDecisionEndpoint = process.env.AUTHORIZE_DECISION_ENDPOINT;
+  const authorizeClientId = process.env.AUTHORIZE_CLIENT_ID;
+  const authorizeClientSecret = process.env.AUTHORIZE_CLIENT_SECRET;
 
   if (!mcpPort) {
     throw new Error('MCP_PORT environment variable is required');
@@ -121,11 +137,21 @@ function loadConfig(): Config {
     throw new Error('CIBA_SCOPE environment variable is required');
   }
 
+  if (!authorizeDecisionEndpoint) {
+    throw new Error('AUTHORIZE_DECISION_ENDPOINT environment variable is required');
+  }
+
+  if (!authorizeClientId) {
+    throw new Error('AUTHORIZE_CLIENT_ID environment variable is required');
+  }
+
+  if (!authorizeClientSecret) {
+    throw new Error('AUTHORIZE_CLIENT_SECRET environment variable is required');
+  }
+
   const port = parseInt(mcpPort, 10);
   const publicUrl = process.env.PUBLIC_URL;
-  const authIssuer = authServerUrl;
-  const authJwksUrl = `${authIssuer}/jwks`;
-  const tokenEndpoint = `${authIssuer}/token`;
+  const tokenEndpoint = `${authServerUrl}/token`;
   const cibaAuthorizationEndpoint = `${authServerUrl}/cibaAuthorization`;
   const cibaTokenEndpoint = `${authServerUrl}/token`;
 
@@ -138,8 +164,6 @@ function loadConfig(): Config {
     publicUrl,
     apiBaseUrl,
     authServerUrl,
-    authIssuer,
-    authJwksUrl,
     tokenEndpoint,
     mcpAudience,
     mcpMemberRatesScope,
@@ -154,6 +178,9 @@ function loadConfig(): Config {
     cibaClientId,
     cibaClientSecret,
     cibaScope,
+    authorizeDecisionEndpoint,
+    authorizeClientId,
+    authorizeClientSecret,
   };
 }
 
@@ -345,7 +372,7 @@ function buildProtocolServer(config: Config): McpServer {
     version: '1.1.0',
   });
 
-  mountWidgetResources(server);
+  mountWidgetResources(server, config);
   mountMcpTools(server, config);
 
   return server;
@@ -358,8 +385,8 @@ export function assembleTransportApp(config: Config): express.Application {
   app.use(express.json());
   app.use('/widget-assets', express.static(join(__dirname, '../../widget-ui/img')));
 
-  app.get('/widget/myhotels-widget', (_req, res) => {
-    const html = readWidgetMarkup('myhotels-widget.html');
+  app.get('/widget/myhotels-widget', (req, res) => {
+    const html = readWidgetMarkup('myhotels-widget.html', config, req);
     res.type('html').send(html);
   });
 

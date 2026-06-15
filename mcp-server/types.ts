@@ -39,6 +39,16 @@ export interface BackendBookingIntent {
   confirmedAt?: string;
 }
 
+export interface BackendBookingQuote {
+  hotelId: string;
+  hotelName: string;
+  startDate: string;
+  nights: number;
+  nightlyRate: number;
+  totalPrice: number;
+  currency: string;
+}
+
 export interface AuthenticatedUser {
   firstName?: string;
   username?: string;

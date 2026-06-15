@@ -1,6 +1,6 @@
-# Configuration Guide
+# Configuration Guidelines
 
-This file contains setup and configuration guidance for running `MyHotels` with both the MCP server and the backend API server.
+This file contains setup and configuration **guidance** for running `MyHotels` with both the MCP server and the backend API server. Previous knowledge of PingOne and PingOne Authorize is required as this is not a detailed step-by-step tutorial.
 
 ## Prerequisites
 
@@ -14,6 +14,16 @@ You need:
 6. PingOne MFA or another PingOne-supported out-of-band approval method
 
 ## PingOne Setup
+
+### Test user and test group
+
+Create a PingOne group for demo users:
+
+- `Group Name`: `ChatGPT User`
+
+Create a test user for the demo and assign that user to the `ChatGPT User` group.
+
+Use this test user when signing in through ChatGPT. The MCP and backend API resource mappings include `groups -> PingOne Group Names`, so the issued tokens should include the `ChatGPT User` group name after authentication and token exchange.
 
 ### MCP protected resource
 
@@ -31,8 +41,15 @@ Enable these scopes:
 Map the MCP resource attributes so ChatGPT receives the user identity claims needed by the app.
 
 Required mappings:
+- `act` -> advanced expression:
+  ```text
+  ({ "sub": #root.context.appConfig.clientId })
+  ```
 - `given_name` -> PingOne `Given Name`
+- `groups` -> PingOne `Group Names`
 - `sub` -> PingOne `Username`
+
+The `act` expression identifies the ChatGPT connector client as the actor in the MCP-facing token. The `given_name`, `groups`, and `sub` mappings preserve the authenticated user's profile, group names, and username for MCP policy and demo context.
 
 ### Backend API protected resource
 
@@ -51,28 +68,53 @@ Map the backend API resource attributes so exchanged API tokens preserve the use
 
 Required mappings:
 - `act` -> advanced expression:
-  ```json
-  {
-    "sub": #root.context.appConfig.clientId,
-    "act": {
-      "sub": #root.context.requestData.subjectToken.client_id
-    } 
-  }
+  ```text
+  ({ "sub": #root.context.appConfig.clientId, "act": {"sub": #root.context.requestData.subjectToken.client_id}})
   ```
+- `groups` -> PingOne `Group Names`
 - `sub` -> PingOne `Username`
 
-The `sub` mapping keeps the authenticated user as the backend API token subject. The `act` mapping records the MCP token-exchange client as the immediate actor and the ChatGPT client from the incoming subject token as the prior actor.
+The `sub` mapping keeps the authenticated user as the backend API token subject. The `groups` mapping preserves the authenticated user's PingOne group names for backend authorization context. The `act` expression sets the backend API token actor to the MCP token-exchange client and nests the ChatGPT client from the incoming subject token as the prior actor.
+
+Expected token claim shape:
+
+- ChatGPT-facing MCP token:
+  ```json
+  {
+    "sub": "<username>",
+    "given_name": "<given-name>",
+    "groups": ["<group-name>"],
+    "act": {
+      "sub": "<chatgpt-connector-client-id>"
+    }
+  }
+  ```
+- Exchanged backend API token:
+  ```json
+  {
+    "sub": "<username>",
+    "groups": ["<group-name>"],
+    "act": {
+      "sub": "<mcp-token-exchange-client-id>",
+      "act": {
+        "sub": "<chatgpt-connector-client-id>"
+      }
+    }
+  }
+  ```
 
 ### ChatGPT agent
 
 Create an AI Agent for ChatGPT to the MCP resource only:
 
-- Redirect URI: `https://chatgpt.com/connector_platform_oauth_redirect`
+- Redirect URI: use the exact redirect URI shown in the ChatGPT connector configuration
 - Grant types:
   - `Authorization Code`
   - `Refresh Token`
 - Token endpoint auth method:
   - `Client Secret Basic`
+
+The redirect URI must match the ChatGPT-provided value exactly. Do not copy a redirect URI from another connector or environment.
 
 
 Attach the MCP protected resource and enable:
@@ -139,6 +181,85 @@ This is a separate client from the MCP token-exchange client. Even though both u
   - used by the MCP server for CIBA authorization and polling
   - used to start and complete the approval flow
 
+### PingOne Authorize client
+
+Create a confidential OIDC application that the MCP server uses to call the PingOne Authorize decision endpoint:
+
+- `Application Type`: `OIDC Web App`
+- Grant types:
+  - `Client Credentials`
+- Token endpoint auth method:
+  - `Client Secret Basic`
+
+Use this application's credentials for:
+
+- `AUTHORIZE_CLIENT_ID`
+- `AUTHORIZE_CLIENT_SECRET`
+
+### PingOne Authorize trust framework and policies
+
+Configure PingOne Authorize with a `MyHotels` trust framework that models the MCP request and the ChatGPT-facing bearer token.
+
+Trust framework service:
+
+- `PingOne Token Introspection`
+  - service type: `HTTP`
+  - target URL: the PingOne authorization server introspection endpoint, for example `https://auth.pingone.eu/<environment-id>/as/introspect`
+  - method: `POST`
+  - content type: `application/x-www-form-urlencoded`
+  - body: `token={{MyHotels.bearerToken}}`
+  - `Authorization` header: Basic introspection credentials (the client id and secret are obtained from the PingOne MCP Resource using the MCP resource ID and the introspection secret) 
+  - certificate validation: `On`
+
+Trust framework attributes:
+
+- `MyHotels.bearerToken`: request parameter containing the inbound ChatGPT bearer token.
+- `MyHotels.service`: request parameter containing the MCP audience, such as `myhotels-hotelmcp`.
+- `MyHotels.resource`: request parameter containing the MCP tool name, such as `search_hotels`, `search_hotels_member_rates`, `prepare_booking`, or `finalize_booking`.
+- `MyHotels.parameters.*`: request parameters for selected tool arguments. The booking policy uses values such as `MyHotels.parameters.totalPrice`.
+- `Introspected Token.Actor Subject`: resolved from the introspection response actor claim, for example JSON path `$.act.sub`.
+- `Introspected Token.Audience`: resolved from the introspected token audience.
+- `Introspected Token.Client Id`: resolved from the introspected token client identifier.
+- `Introspected Token.Scopes`: resolved from the introspected token scopes.
+- `Introspected Token.Subject Groups`: resolved from the introspected token group names. Use an empty collection as the default when no groups are present.
+
+Create reusable named conditions for the protected-tool policies:
+
+- `User is a ChatGPT user`: verifies that `Introspected Token.Subject Groups` contains the expected ChatGPT user group, such as `ChatGPT User`.
+- `Token was issued to ChatGPT`: verifies that `Introspected Token.Actor Subject` matches the ChatGPT connector client ID.
+- `Token is for the Hotel MCP`: verifies that `Introspected Token.Audience` contains `myhotels-hotelmcp`.
+- `Token has the member rates permission`: verifies that `Introspected Token.Scopes` contains `my-hotels:mcp:member_rates`.
+- `Token has the booking initialization permission`: verifies that `Introspected Token.Scopes` contains `my-hotels:mcp:book`.
+- `Token has finalize payment permission`: verifies that `Introspected Token.Scopes` contains `my-hotels:mcp:book` for booking finalization.
+
+Create the policy tree under `Policies -> MyHotels -> MCP Server`:
+
+- `Public Tools`
+  - applies when `MyHotels.resource` equals `search_hotels`
+  - first-applicable combining algorithm
+  - rule: `Permit`
+- `Protected Tools`
+  - child policy: `Allow ChatGPT Member Rates Access`
+    - applies when `MyHotels.resource` equals `search_hotels_member_rates`
+    - single-deny-overrides combining algorithm
+    - rules require the ChatGPT user, ChatGPT-issued token, Hotel MCP audience, and member-rates scope
+  - child policy: `Allow ChatGPT Booking Initialization Access`
+    - applies when `MyHotels.resource` equals `prepare_booking`
+    - single-deny-overrides combining algorithm
+    - rules require the ChatGPT user, ChatGPT-issued token, Hotel MCP audience, and booking scope
+    - amount rules:
+      - allow payments below `200 EUR`
+      - return a Human in the Loop obligation above `200 EUR`
+      - deny payments above `1000 EUR`
+  - child policy: `Allow ChatGPT Booking Finalize Access`
+    - applies when `MyHotels.resource` equals `finalize_booking`
+    - single-deny-overrides combining algorithm
+    - rules require the ChatGPT user, ChatGPT-issued token, Hotel MCP audience, and booking/finalize scope
+  - child policy: `Default Deny`
+    - denies any MCP request that does not match an explicit allow policy
+
+Create a PingOne Authorize decision endpoint for this policy tree and use its URL as `AUTHORIZE_DECISION_ENDPOINT`.
+
 ## DaVinci Flow Setup
 
 This project expects two DaVinci flows:
@@ -167,6 +288,8 @@ For each flow:
 
 Always in DaVinci in Applications -> PingOne SSO Connection, create the login (`MyHotels ChatGPT User Authentication`) and the CIBA (`MyHotels CIBA Approval via Magic Link`)PingOne Flow Policies pointing to the imported flows.
 
+The CIBA approval flow triggers the notification email from DaVinci. Create a `General` email template for that notification, and make sure the email body includes the `${magicLink}` parameter so the user can open the approval link.
+
 In PingOne:
 
 1. Open the ChatGPT-facing MCP application.
@@ -193,13 +316,19 @@ In PingOne:
   - audience requested during exchange: `myhotels-hotelapi`
   - scopes requested during exchange:
     - `my-hotels:api:member_rates` for member-rate hotel search
-    - `my-hotels:api:book` for booking creation and booking status
+    - `my-hotels:api:book` for booking quote, creation, and finalization
   - DaVinci flow: none in this project setup
 
 - CIBA client
   - used by MCP for agent-initiated booking approval
   - CIBA scope: `openid my-hotels:api:book`
   - DaVinci flow: `MyHotels CIBA Approval via Magic Link`
+
+- Authorize client
+  - used by MCP to call the PingOne Authorize decision endpoint
+  - grant type: client credentials
+  - token endpoint authentication: client secret basic
+  - decision response required by the MCP: `decision: "PERMIT"`
 
 ## Environment Variables
 
@@ -235,18 +364,32 @@ CIBA_CLIENT_SECRET=<pingone-ciba-client-secret>
 
 # CIBA scope used by the MCP server
 CIBA_SCOPE=openid my-hotels:api:book
+
+# PingOne Authorize PDP used by the MCP server
+AUTHORIZE_DECISION_ENDPOINT=https://api.pingone.eu/v1/environments/<environment-id>/decisionEndpoints/<decision-endpoint-id>
+AUTHORIZE_CLIENT_ID=<pingone-authorize-client-id>
+AUTHORIZE_CLIENT_SECRET=<pingone-authorize-client-secret>
 ```
 
 How these values are used:
 
 - ChatGPT authenticates to the MCP using the separate ChatGPT connector client attached to the MCP protected resource.
-- The MCP validates the ChatGPT token locally with JWKS against `MCP_AUDIENCE` and the protected tool's required MCP scope.
+- The ChatGPT-facing MCP token includes the authenticated user's `sub`, `given_name`, and `groups`, plus an `act.sub` value for the ChatGPT connector client ID.
+- The MCP forwards the inbound ChatGPT bearer token to PingOne Authorize and does not locally validate that token with JWKS.
+- After Authorize returns `PERMIT`, the MCP parses permitted token claims only for demo state such as display name and booking owner matching.
 - For protected backend calls, the MCP uses `MCP_CLIENT_ID` and `MCP_CLIENT_SECRET` from the separate MCP token-exchange client.
 - That token exchange requests a backend API token for `API_AUDIENCE` and the matching API scope:
   - member-rate search requests `API_MEMBER_RATES_SCOPE`
-  - booking creation and status requests `API_BOOK_SCOPE`
+  - booking quote, creation, and finalization requests `API_BOOK_SCOPE`
+- The exchanged backend API token keeps the user `sub` and `groups`, then changes `act.sub` to the MCP token-exchange client ID and nests the ChatGPT connector client ID under `act.act.sub`.
 - The backend API validates that exchanged token locally with JWKS.
 - The MCP server uses the separate CIBA client to start and poll approval sessions.
+- The MCP server uses the separate Authorize client to call the PingOne Authorize PDP for every MCP tool call.
+- Each Authorize call includes:
+  - `MyHotels.service`: the MCP audience
+  - `MyHotels.resource`: the MCP tool name
+  - `MyHotels.parameters.*`: the flattened tool arguments, such as `MyHotels.parameters.totalPrice` and `MyHotels.parameters.currency`
+  - `MyHotels.bearerToken`: the inbound ChatGPT bearer token, when present
 
 Important:
 
@@ -341,12 +484,21 @@ Check:
 Check:
 
 - `AUTH_SERVER_URL`
-- the user token includes the configured MCP scope for the protected tool being called
-- the MCP token audience matches `MCP_AUDIENCE`
+- the Authorize policy permits the user token for the protected tool being called
+- the Authorize policy checks the MCP token audience against `MCP_AUDIENCE`, if audience enforcement is desired
 - the ChatGPT connector client is attached to the MCP protected resource, not the API resource
 - token exchange is enabled for the separate MCP token-exchange client in PingOne
 - the backend-translated token audience matches `API_AUDIENCE`
 - the backend-translated token includes the matching API scope for the backend route being called
+
+### Authorize decision issues
+
+Check:
+
+- `AUTHORIZE_DECISION_ENDPOINT`
+- `AUTHORIZE_CLIENT_ID`
+- `AUTHORIZE_CLIENT_SECRET`
+- the decision endpoint returns `decision: "PERMIT"` for allowed operations
 
 ### CIBA setup issues
 

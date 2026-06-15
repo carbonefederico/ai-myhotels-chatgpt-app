@@ -30,6 +30,10 @@ export interface QuoteBookingRequest {
   nights: number;
 }
 
+export interface BookingQuoteResponse {
+  quote: BookingQuote;
+}
+
 export type CreateBookingIntentRequest = QuoteBookingRequest;
 
 export interface ConfirmedBooking extends BookingQuote {

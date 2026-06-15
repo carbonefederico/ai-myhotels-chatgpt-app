@@ -3,7 +3,7 @@
  */
 import { logInfo } from "./logging.js";
 import type { Config } from "./server.js";
-import type { BackendBookingIntent, Hotel } from "./types.js";
+import type { BackendBookingIntent, BackendBookingQuote, Hotel } from "./types.js";
 import { decodeJwtClaimsForLogging } from "../shared/jwt-validation.js";
 
 interface HotelSearchResponse {
@@ -12,6 +12,10 @@ interface HotelSearchResponse {
 
 interface BookingIntentResponse {
   bookingIntent: BackendBookingIntent;
+}
+
+interface BookingQuoteResponse {
+  quote: BackendBookingQuote;
 }
 
 interface TokenExchangeResponse {
@@ -161,6 +165,34 @@ export async function fetchHotels(
 
   const payload = await handleJsonResponse<HotelSearchResponse>(await fetch(url, { headers }));
   return payload.hotels;
+}
+
+/** Requests an authoritative backend quote before policy evaluation creates booking state. */
+export async function quoteBooking(
+  config: Config,
+  input: {
+    hotelId: string;
+    startDate: string;
+    nights: number;
+    subjectToken: string;
+  }
+): Promise<BackendBookingQuote> {
+  const headers = await buildBackendAuthHeaders(config, input.subjectToken, config.apiBookScope);
+  const response = await fetch(new URL("/booking-quotes", config.apiBaseUrl), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify({
+      hotelId: input.hotelId,
+      startDate: input.startDate,
+      nights: input.nights,
+    }),
+  });
+
+  const payload = await handleJsonResponse<BookingQuoteResponse>(response);
+  return payload.quote;
 }
 
 /** Creates a new booking intent through the backend booking-intents resource. */

@@ -14,6 +14,7 @@ import {
 import type {
   BookingIntent,
   BookingIntentResponse,
+  BookingQuoteResponse,
   CreateBookingIntentRequest,
   QuoteBookingRequest,
 } from "./types.js";
@@ -325,6 +326,22 @@ export function assembleApiApp(config: ApiServerConfig): express.Application {
       return;
     }
     res.json(buildHotelSearchPayload(false, city));
+  });
+
+  app.post("/booking-quotes", async (req, res) => {
+    const auth = await requireApiToken(req, res, config, config.apiBookScope);
+    if (!auth) {
+      return;
+    }
+
+    const quote = calculateBookingQuote(req.body as QuoteBookingRequest);
+    if (!quote) {
+      res.status(404).json({ error: "Hotel not found" });
+      return;
+    }
+
+    const payload: BookingQuoteResponse = { quote };
+    res.json(payload);
   });
 
   app.post("/booking-intents", async (req, res) => {

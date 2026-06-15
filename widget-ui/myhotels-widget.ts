@@ -156,7 +156,7 @@ function renderApprovalCard(): string {
     <div class="notice-card notice-card--approval">
       <div class="notice-card__header">
         <h3>${renderBookingTitle(currentBookingApproval.status)}</h3>
-        <button type="button" id="close-approval-btn" class="notice-card__close" aria-label="Close booking status">Close</button>
+        <button type="button" id="close-approval-btn" class="notice-card__close" aria-label="Close booking finalization">Close</button>
       </div>
       <div class="notice-card__body">
         <p>${currentBookingApproval.hotelName} from ${currentBookingApproval.startDate} for ${currentBookingApproval.nights} night(s).</p>
@@ -558,10 +558,10 @@ async function submitBookingRequest(startDate: string, nightsInput: string): Pro
   }
 }
 
-/** Polls the booking-intent status tool for updates to the current approval flow. */
+/** Attempts to finalize the booking, returning pending state while approval is incomplete. */
 async function fetchBookingStatus(transactionId: string): Promise<void> {
   try {
-    const result = await window.openai.callTool("get_booking_status", {
+    const result = await window.openai.callTool("finalize_booking", {
       transactionId,
     });
 
@@ -572,14 +572,14 @@ async function fetchBookingStatus(transactionId: string): Promise<void> {
     }
     currentUiError = getToolErrorMessage(
       result,
-      "Couldn’t refresh booking status."
+      "Couldn’t finalize booking."
     );
     stopBookingStatusPolling();
     renderHotelMapView();
   } catch (error) {
-    console.error("Error refreshing booking status:", error);
+    console.error("Error finalizing booking:", error);
     stopBookingStatusPolling();
-    currentUiError = "Couldn’t refresh booking status.";
+    currentUiError = "Couldn’t finalize booking.";
     renderHotelMapView();
   }
 }
