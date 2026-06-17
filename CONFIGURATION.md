@@ -460,11 +460,33 @@ curl https://abc123.ngrok-free.app/.well-known/oauth-protected-resource
 
 ## Connect from ChatGPT
 
-Add the MCP connector in ChatGPT using:
+Create a custom ChatGPT connector for the MyHotels MCP server:
 
-```text
-https://<your-public-url>/mcp
-```
+1. Open ChatGPT connector settings and create a new app / connector.
+2. Set the name, for example `MyHotels`.
+3. Use `Server URL` as the connection type.
+4. Set the MCP server URL to:
+
+   ```text
+   https://<your-public-url>/mcp
+   ```
+
+5. Set authentication to `Mixed` so ChatGPT can use public tools without OAuth and request OAuth for protected tools.
+6. Open the advanced OAuth settings.
+7. Use a user-defined OAuth client.
+8. Copy the ChatGPT-generated callback URL and add that exact URL to the redirect URIs of the ChatGPT-facing MCP application in PingOne.
+9. In ChatGPT, set the OAuth client ID and client secret from the ChatGPT-facing MCP application.
+10. Confirm that ChatGPT discovers the PingOne OAuth endpoints and the MCP protected resource metadata.
+11. Select the MCP scopes exposed by the connector, including:
+
+    ```text
+    my-hotels:mcp:member_rates
+    my-hotels:mcp:book
+    ```
+
+12. Accept the custom MCP server warning and create the connector.
+
+After creating the connector, start a ChatGPT conversation with the MyHotels app and connect it when prompted. The first protected action should send the user through the PingOne authentication flow.
 
 If ChatGPT does not pick up tool changes after redeploy, use the refresh control in the ChatGPT UI.
 
