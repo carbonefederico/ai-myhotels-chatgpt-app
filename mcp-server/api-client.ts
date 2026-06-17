@@ -4,7 +4,6 @@
 import { logInfo } from "./logging.js";
 import type { Config } from "./server.js";
 import type { BackendBookingIntent, BackendBookingQuote, Hotel } from "./types.js";
-import { decodeJwtClaimsForLogging } from "../shared/jwt-validation.js";
 
 interface HotelSearchResponse {
   hotels: Hotel[];
@@ -31,18 +30,6 @@ type CachedBackendToken = {
 
 const backendTokenCache = new Map<string, CachedBackendToken>();
 
-function redactToken(token: string): string {
-  if (token.length <= 24) {
-    return token;
-  }
-
-  return `${token.slice(0, 12)}...${token.slice(-10)}`;
-}
-
-function prettyJson(value: unknown): string {
-  return JSON.stringify(value, null, 2);
-}
-
 /** Parses backend JSON or throws a transport-level error with the response body. */
 async function handleJsonResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -64,25 +51,17 @@ async function exchangeBackendAccessToken(config: Config, subjectToken: string, 
   const now = Date.now();
   const cached = backendTokenCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
-    const cachedClaims = decodeJwtClaimsForLogging(cached.accessToken);
     logInfo(
       ["mcp", "token-exchange"],
-      `cache hit audience=${config.apiAudience} scope=${apiScope} cachedToken=${redactToken(cached.accessToken)}`
+      `cache hit audience=${config.apiAudience} scope=${apiScope}`
     );
-    if (cachedClaims) {
-      logInfo(["mcp", "token-exchange"], `cached backend token claims=\n${prettyJson(cachedClaims)}`);
-    }
     return cached.accessToken;
   }
 
-  const subjectTokenClaims = decodeJwtClaimsForLogging(subjectToken);
   logInfo(
     ["mcp", "token-exchange"],
-    `requesting audience=${config.apiAudience} scope=${apiScope} subjectToken=${redactToken(subjectToken)}`
+    `requesting audience=${config.apiAudience} scope=${apiScope}`
   );
-  if (subjectTokenClaims) {
-    logInfo(["mcp", "token-exchange"], `subject token claims=\n${prettyJson(subjectTokenClaims)}`);
-  }
 
   const params = new URLSearchParams({
     grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
@@ -114,17 +93,8 @@ async function exchangeBackendAccessToken(config: Config, subjectToken: string, 
 
   logInfo(
     ["mcp", "token-exchange"],
-    `received backend token tokenType=${payload.token_type ?? ""} expiresIn=${payload.expires_in ?? ""} accessToken=${redactToken(payload.access_token)}`
+    `received backend token tokenType=${payload.token_type ?? ""} expiresIn=${payload.expires_in ?? ""}`
   );
-  const exchangedClaims = decodeJwtClaimsForLogging(payload.access_token);
-  if (exchangedClaims) {
-    logInfo(
-      ["mcp", "token-exchange"],
-      `received backend token claims=\n${prettyJson(exchangedClaims)}`
-    );
-  } else {
-    logInfo(["mcp", "token-exchange"], "received backend token is not a readable JWT");
-  }
 
   const expiresAt = now + Math.max((payload.expires_in ?? 60) - 5, 5) * 1000;
   backendTokenCache.set(cacheKey, {

@@ -57,15 +57,6 @@ const TOKEN_CACHE_TTL_MS = 60 * 1000;
 const jwksCache = new Map<string, CachedJwks>();
 const tokenCache = new Map<string, CachedToken>();
 
-/** Redacts a token before writing it to debug logs. */
-function redactToken(token: string): string {
-  if (token.length <= 16) {
-    return token;
-  }
-
-  return `${token.slice(0, 10)}...${token.slice(-8)}`;
-}
-
 /** Produces a compact claim summary for auth debugging. */
 export function summarizeValidatedClaims(claims: ValidatedTokenClaims): string {
   return JSON.stringify({
@@ -260,15 +251,13 @@ export async function validateJwtToken(
   const now = Date.now();
   const cached = tokenCache.get(token);
   if (cached && cached.expiresAt > now) {
-    logger.info(`token cache hit token=${redactToken(token)} claims=\n${prettyJson(cached.claims)}`);
+    logger.info(`token cache hit claims=${summarizeValidatedClaims(cached.claims)}`);
     return cached.claims;
   }
 
   try {
-    logger.info(`validating jwt token=${redactToken(token)}`);
     const parsed = parseJwt(token);
     logger.info(`jwt header kid=${String(parsed.header.kid ?? "")} alg=${String(parsed.header.alg ?? "")}`);
-    logger.info(`jwt payload=\n${prettyJson(parsed.payload)}`);
     const kid = typeof parsed.header.kid === "string" ? parsed.header.kid : undefined;
     if (!kid) {
       throw new Error("JWT header does not include kid");
